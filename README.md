@@ -1,78 +1,159 @@
-<!--
-  自动为 AI 编码代理准备的仓库指导文件。
-  目标：让自动代码代理（Copilot、Assistant 类工具）快速上手本项目，了解架构、关键文件、开发流程与约定。
--->
+#  亚马逊竞品情报系统 (Project Spyglass) V1.0
 
-# Copilot / AI 代码代理说明（精简）
-
-下面的说明基于仓库根目录的 `README.md`（项目规格）与约定结构。主要面向自动化编码代理，内容简洁、可执行。
-
-## 主要架构（大局观）
-- 后端：Spring Boot（API-first）。核心职责：爬虫调度、数据入库、告警触发与对外 REST API。
-- 爬虫：静态抓取使用 Jsoup，动态/库存抓取使用 Selenium；所有外部请求需通过住宅代理（例如 Bright Data）。
-- 存储：PostgreSQL 保存时序/实体数据（价格、BSR、评论、库存快照等）。
-- 通知：通过钉钉机器人 Webhook 推送告警。
-- 部署：Docker + docker-compose（One-click 启动后端与 PostgreSQL）。
-
-## 快速可用路径与命名约定
-- 后端服务（预期）： `spyglass-backend/` 或 `backend/`，Java 源码在 `src/main/java`。
-- 常见包分层：`controller`、`service`、`repository`、`model/entity`、`scraper`。
-- OpenAPI 文档：`/v3/api-docs`（springdoc-openapi） — AI 可直接读取以生成或更新前端。
-- 定时任务：查找 `@Scheduled` 注解的类（抓取调度）。
-
-## 关键文件与信号（在修改或实现时优先查看/更新）
-- `README.md`（项目规格） — 包含所有业务规则（警报触发、抓取频率、重要端点）。
-- `docker-compose.yml` 或 `docker/` — 启动环境与数据库卷配置，注意 `POSTGRES_*` 环境变量名。
-- `application.yml` / `application.properties` — 数据源、代理配置、JWT 密钥以环境变量注入为准。
-- `src/**/scraper/**` — 查找 Jsoup / Selenium 实现及代理注入点。
-- `src/**/service/**` — 寻找比较/告警逻辑（MD5 比较主图/A+、差评去重、价格/库存阈值判断）。
-
-## 开发/构建/运行（可执行命令）
-（基于常见 Spring Boot + Maven 约定）
-
-本地构建并运行（如果存在 Maven Wrapper）：
-
-```bash
-cd <repo-root-or-backend>
-./mvnw -DskipTests package
-./mvnw spring-boot:run
-```
-
-使用 Docker Compose 启动（推荐进行集成测试）：
-
-```bash
-docker compose up --build
-```
-
-注意：所有敏感配置（DB 密码、JWT 密钥、代理 Key、钉钉 Webhook）应来自环境变量或 `.env`，不得硬编码。
-
-## 项目特有约定（从 README 可观察到的实现细节）
-- API-first：后端必须公开 OpenAPI（用于 AI 生成前端），优先保证 `/v3/api-docs` 的完整性。
-- 抓取策略：每次抓取需持久化时间戳并与上次抓取数据差异化比较（价格、库存、评论、主图/A+的 MD5）。
-- 代理强制：所有对亚马逊的请求应走可替换的代理层（实现处应显式调用代理客户端或注入代理配置）。
-- 异步与容错：抓取任务应异步执行并具备重试策略（如失败后延迟重试），避免单点阻塞。
-
-## 给 AI / Copilot 的具体编码提示（示例）
-- 当实现抓取比较逻辑时，遵循 README 中的触发规则，例如：
-  - 价格变更 -> `newPrice != oldPrice` -> 生成 PriceAlert 并入库/推送。
-  - 差评 -> 新的 1-3 星评论（以评论唯一 id 或内容+日期去重）触发 NegativeReviewAlert。
-  - 主图/A+ -> 比较 HTML 或 URL 的 MD5 值变化。
-- 在添加新 API 时，务必让 `springdoc-openapi` 扫描到并生成 `/v3/api-docs`。
-- 在实现 Selenium 抓取库存时，封装一层可替换的 DriverProvider（便于在 CI/容器中切换 headless/remote）。
-
-## 变更/提交规则（针对自动化代理）
-- 小而明确的 PR：每次改动只实现单一职责（例如：新增一个抓取器、或只修改告警触发规则）。
-- 测试优先：在修改核心数据流程（抓取 -> 比较 -> 告警）时同时添加单元测试或集成测试（可用 Testcontainers + PostgreSQL）。
-
-## 如果找不到源码位置（AI 代理处理流程）
-1. 检查根目录是否存在 `spyglass-backend/` 或 `backend/`；若不存在，优先创建后端骨架并将 `README.md` 中的规范作为实现契约。
-2. 生成 OpenAPI stub（Controller + DTO）以供前端与自动化代理并行工作。
-
-## 本仓库已生成的骨架
-- 已在仓库内生成了一个最小后端骨架：`spyglass-backend/`（含 `pom.xml`、主类、示例 Controller、ScraperService、`application.yml` 与 Thymeleaf 模板）。
-  
-该骨架用于快速验证构建与本地运行，AI 代理在实现真实逻辑时应替换或扩展这些文件。
+| 文档版本 | V1.0 |
+| :--- | :--- |
+| **项目名称** | 亚马逊竞品情报系统 (Project Spyglass) |
+| **创建日期** | 2025年10月29日 |
+| **目标** | 打造一个7x24小时运行的自动化竞品监控引擎，通过API驱动和AI辅助的UI，为亚马逊运营团队提供关键决策情报并解放生产力。 |
 
 ---
 
-如果你希望，我可以把 README 中的 API 规范直接转成 OpenAPI stub（Controller + DTO）或生成一个最小的后端骨架；告诉我你想要的优先项（例如：登录 + ASIN 列表 + 抓取调度）。
+## 1. 简介
+
+### 1.1. 问题陈述 (The Problem)
+
+亚马逊运营团队目前依赖**手动、重复**的劳动来跟踪竞品。这包括每天打开数十个ASIN页面，检查价格变动、新差评、BSR排名和库存情况。这个过程极其耗时、容易出错、缺乏数据沉淀（无法回溯历史），并且总是**被动响应**而非**主动预警**。
+
+### 1.2. 解决方案 (The Solution)
+
+“竞品情报系统” (Project Spyglass) 是一个内部SaaS工具。它通过**自动化Web爬虫**（非官方API）模拟用户行为，7x24小时不间断地抓取、存储和分析竞品数据。系统将通过一个**现代Web界面**（由AI辅助生成）展示历史趋势，并通过**即时通讯工具**（如钉钉）发送**主动警报**。
+
+### 1.3. 核心目标 (Goals & Objectives)
+
+1.  **效率提升：** 释放运营团队每天至少1-2小时的手动跟踪时间。
+2.  **主动决策：** 将团队从“被动查看”转变为“主动收到警报”，在竞品行动（如调价、断货）的**第一时间**做出反应。
+3.  **数据沉淀：** 建立竞品历史数据库，用于复盘和战略分析，而不仅仅是“看一眼就忘”。
+
+### 1.4. 范围 (Scope)
+
+| V1.0 范围内 (In-Scope) | V1.0 范围外 (Out-of-Scope) |
+| :--- | :--- |
+| ✅ 基于Web爬虫的数据抓取 | ❌ 任何官方亚马逊SP-API/MWS的集成 |
+| ✅ 关键数据点（价格、BSR、评论、库存、A+、主图）| ❌ 自动化亚马逊后台操作（如自动调价） |
+| ✅ 历史数据存储和图表化展示 | ❌ 抓取关键词搜索排名 (V2.0 考虑) |
+| ✅ 主动警报推送（钉钉） | ❌ 复杂的权限管理（V1.0 只有管理员/用户） |
+| ✅ API First 架构（Spring Boot RESTful API） | ❌ 抓取亚马逊以外的平台（如eBay, Walmart） |
+| ✅ AI辅助生成的Web前端（React/Vue） | |
+
+---
+
+## 2. 用户画像与核心场景 (User Personas & Stories)
+
+### 2.1. 用户画像
+
+* **画像1：Alex（亚马逊运营）**
+    * **角色：** 团队的核心运营，负责2-3个核心产品线。
+    * **痛点：** “我每天早上要花1小时开20个竞品Tab页，生怕他们降价或上了差评我不知道。我受够了复制粘贴到Excel里。”
+    * **需求：** “我需要一个仪表盘，一眼就能看到所有竞品‘昨天发生了什么’。并且，如果他们有动作，立刻通知我！”
+
+* **画像2：Sam（系统管理员 - 即你）**
+    * **角色：** 开发者，负责工具的维护和部署。
+    * **痛点：** “我需要系统稳定，并且在添加新功能时，不需要重构所有东西。”
+    * **需求：** “我需要清晰的API、良好的日志、简单的部署方式（Docker）。”
+
+### 2.2. 用户故事 (User Stories)
+
+| 优先级 | 作为... (Persona) | 我想要... (Action) | 以便我能... (Goal) |
+| :--- | :--- | :--- | :--- |
+| **P0** | Alex (运营) | 登录系统并看到一个仪表盘，列出我所有监控的ASIN | 快速了解大盘情况。 |
+| **P0** | Alex (运营) | 在仪表盘上看到哪些ASIN**发生了变化**（如价格、差评） | 优先处理最重要的信息。 |
+| **P0** | Alex (运营) | 添加一个新的竞品ASIN进行监控 | 扩展我的情报网络。 |
+| **P0** | Alex (运营) | 当一个竞品**价格变动**或**库存低于阈值**时 | **立即**在我的钉钉群里收到通知。 |
+| **P1** | Alex (运营) | 当一个竞品**获得了新的1-3星差评**时 | **立即**收到通知，并查看差评内容，以便分析他们的弱点。 |
+| **P1** | Alex (运营) | 点击任意一个ASIN，查看它的**历史价格和BSR曲线** | 分析它的长期策略和销售趋势。 |
+| **P1** | Sam (管理员) | 通过**API文档**（Swagger）来测试后端 | 确保后端按预期工作，并指导AI生成前端。 |
+| **P2** | Alex (运营) | 收到竞品**主图或A+内容变更**的警报 | 了解他们是否在测试新的营销素材。 |
+
+---
+
+## 3. 功能需求 (Functional Requirements)
+
+### F-MOD-1: 认证 & 安全 (Auth)
+
+* **F-AUTH-001:** 系统必须提供基于用户名和密码的登录功能。
+* **F-AUTH-002:** 密码必须在数据库中**加密存储**（例如使用BCrypt）。
+* **F-AUTH-003:** 登录成功后，后端必须返回一个**JWT (JSON Web Token)**，用于后续所有API请求的身份验证。
+* **F-AUTH-004:** 所有非登录/注册的API端点必须受到JWT保护。
+
+### F-MOD-2: ASIN管理 (Management)
+
+* **F-ASIN-001 (仪表盘):** 用户登录后，应看到一个“ASIN列表”仪表盘。
+* **F-ASIN-002 (列表项):** 列表中的每一项应展示ASIN的**最新关键数据**：名称、ASIN、主图、当前价格、当前BSR、评论数、预估库存。
+* **F-ASIN-003 (警报标识):** 列表项必须有明显的**视觉标识**，表明该ASIN在最近一次抓取中是否触发了警报（如价格变动、新差评）。
+* **F-ASIN-004 (添加ASIN):** 用户必须能通过一个表单添加新的ASIN。
+    * **输入字段：** ASIN (字符串), 站点 (下拉框: US, UK等), 昵称 (字符串), 库存警报阈值 (数字)。
+* **F-ASIN-005 (删除ASIN):** 用户必须能从仪表盘中删除一个ASIN，停止对它的监控。
+* **F-ASIN-006 (详情页):** 点击列表中的任意ASIN，应跳转到该ASIN的“详情页”。
+
+### F-MOD-3: 爬虫引擎 (Scraper Engine) - (后端)
+
+* **F-SCRAPE-001 (定时调度):** 系统必须有一个定时任务调度器（如 `@Scheduled`），按预设频率（例如：每4小时）自动为列表中的所有ASIN执行抓取。
+* **F-SCRAPE-002 (异步执行):** 抓取任务必须是异步的（如 `@Async`），确保单个ASIN的抓取失败（如被屏蔽）不会阻塞整个队列。
+* **F-SCRAPE-003 (代理集成 - 关键):** **所有**对亚马逊的HTTP/S请求**必须**通过**旋转住宅IP代理服务**（如 Bright Data）发出。
+* **F-SCRAPE-004 (静态抓取 - Jsoup):** 引擎必须能抓取以下静态数据：
+    * 价格 (Buybox价格)
+    * BSR (大类目排名)
+    * 评论总数
+    * 平均星级
+    * 主图URL (用于MD5 HASH对比)
+    * A+ 内容区域的原始HTML (用于MD5 HASH对比)
+* **F-SCRAPE-005 (动态抓取 - Selenium):** 引擎必须能使用Selenium模拟浏览器行为，执行“999加购法”来抓取**预估库存**。
+* **F-SCRAPE-006 (差评抓取):** 引擎必须能抓取最新10条评论，并筛选出1-3星的评论（包括内容和日期）。
+* **F-SCRAPE-007 (数据存储):** 每次抓取成功后，所有数据点（价格、BSR、库存等）必须连同**时间戳**一起存入PostgreSQL数据库。
+
+### F-MOD-4: 警报与数据 (Alert & Data Engine)
+
+* **F-DATA-001 (数据对比):** 在每次新数据（F-SCRAPE-007）存入后，系统必须立即将其与**上一次**的抓取数据进行对比。
+* **F-DATA-002 (警报触发器 - 价格):** `newPrice != oldPrice` -> 触发警报。
+* **F-DATA-003 (警报触发器 - 库存):** `newInventory < inventoryThreshold` (F-ASIN-004中设置的阈值) -> 触发警报。
+* **F-DATA-004 (警报触发器 - 差评):** `newNegativeReview` (在数据库中未见过的差评) -> 触发警报。
+* **F-DATA-005 (警报触发器 - 主图):** `MD5(newImageUrl) != MD5(oldImageUrl)` -> 触发警报。
+* **F-DATA-006 (警报触发器 - A+):** `MD5(newAplusHtml) != MD5(oldAplusHtml)` -> 触发警报。
+* **F-DATA-007 (推送器 - 钉钉):** 所有被触发的警报，必须被格式化为人类可读的消息，并通过**钉钉机器人Webhook**推送到指定群组。
+* **F-DATA-008 (历史曲线):** ASIN详情页（F-ASIN-006）必须能调用API，获取该ASIN的**历史数据**（价格、BSR、库存），并在前端使用**图表库 (Chart.js)** 绘制成折线图。
+
+### F-MOD-5: API 端点 (API Endpoints) - (供AI生成前端使用)
+
+* **F-API-001 (OpenAPI):** 系统必须使用 `springdoc-openapi` 自动生成 `/v3/api-docs` (OpenAPI 3.0 JSON) 规范，这是AI生成前端的**核心输入**。
+* **F-API-002 (Auth):**
+    * `POST /api/auth/login` (登录, 返回JWT)
+    * `POST /api/auth/register` (注册)
+* **F-API-003 (ASIN Management):** (受JWT保护)
+    * `GET /api/asin` (获取所有ASIN的仪表盘列表)
+    * `POST /api/asin` (添加新ASIN)
+    * `DELETE /api/asin/{id}` (删除ASIN)
+    * `PUT /api/asin/{id}/config` (修改ASIN配置)
+* **F-API-004 (Data Query):** (受JWT保护)
+    * `GET /api/data/asin/{id}` (获取单个ASIN的详细信息，用于详情页)
+    * `GET /api/data/asin/{id}/history?range=30d` (获取ASIN的历史数据，用于图表)
+    * `GET /api/data/alerts` (获取全局警报日志列表)
+
+---
+
+## 4. 非功能性需求 (Non-Functional Requirements, NFRs)
+
+| 类别 | 需求 (NFR) |
+| :--- | :--- |
+| **性能** | **NFR-P-001:** API 响应时间 (非爬虫) 必须在 500ms 以下。 |
+| | **NFR-P-002:** 仪表盘页面 (UI) 加载时间必须在 3 秒以下。 |
+| | **NFR-P-003:** 单个ASIN的全量抓取（含Selenium）应在 90 秒内完成。 |
+| **安全** | **NFR-S-001:** 所有Web流量必须使用 **HTTPS (SSL)**。 |
+| | **NFR-S-002:** 所有敏感密钥（数据库密码、JWT密钥、代理APIKey、钉钉Webhook）**绝不能**硬编码在代码中，必须使用环境变量或 `.properties` 文件注入。 |
+| **可靠性** | **NFR-R-001:** 爬虫必须有**重试机制**（如抓取失败，30分钟后重试1次）。 |
+| | **NFR-R-002:** 系统应7x24小时运行，Docker容器必须配置为 `restart: always`。 |
+| | **NFR-R-003:** 数据库数据必须**持久化**（使用Docker Volume）。 |
+| **部署** | **NFR-D-001:** 整个应用（后端、数据库、Nginx）必须通过 `docker-compose.yml` **一键编排**。 |
+| | **NFR-D-002:** Nginx必须配置为反向代理：`your.domain.com/` 指向前端静态文件，`your.domain.com/api/` 指向Spring Boot后端。 |
+| **可用性** | **NFR-U-001:** （针对AI生成的UI）界面必须简洁、直观，无需培训即可上手。 |
+| | **NFR-U-002:** （针对AI生成的UI）界面必须是**响应式**的，支持在移动设备上查看。 |
+
+---
+
+## 5. V1.0 启动标准
+
+* 所有 **P0** 和 **P1** 级别的用户故事均已实现并通过测试。
+* F-MOD-1, F-MOD-2, F-MOD-3, F-MOD-4, F-MOD-5 中定义的核心功能均已实现。
+* `springdoc-openapi` 文档已自动生成且内容准确。
+* 钉钉警报（价格、差评、库存）推送功能稳定。
+* AI已成功生成一个可用的前端界面（仪表盘、详情页、登录页）。
+* 已成功在**线上服务器**（美国）通过Docker Compose部署，并集成了**付费住宅代理**。
