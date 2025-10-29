@@ -1,0 +1,102 @@
+<!--
+    POM 文件（中文注释）：
+    这是 spyglass-backend 模块的 Maven 配置文件，定义了项目坐标、父级 Spring Boot 依赖与构建插件。
+    注意：所有敏感配置（数据库密码、代理 Key、钉钉 Webhook）应通过环境变量注入，不要在此文件中硬编码。
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.3</version>
+        <relativePath/> <!-- lookup parent from repository -->
+    </parent>
+
+    <groupId>com.amz</groupId>
+    <artifactId>spyglass-backend</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>spyglass-backend</name>
+    <description>Spyglass 后端服务：最小化骨架（包含中文注释）</description>
+
+    <properties>
+        <java.version>17</java.version>
+        <!-- 指定 Java 编译版本 -->
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+    </properties>
+
+    <!-- 依赖说明：
+        - spring-boot-starter-web: 提供 REST 与嵌入式 Tomcat
+        - spring-boot-starter-thymeleaf: 用于简单的模板展示（仪表盘 stub）
+        - spring-boot-starter-data-jpa: JPA 支持，用于实体持久化
+        - postgresql: 生产环境使用 PostgreSQL 驱动（runtime 范围）
+        - jsoup: 静态抓取 HTML 的轻量库
+        - springdoc-openapi-starter-webmvc-ui: 自动生成 OpenAPI / Swagger UI
+        - spring-boot-starter-validation: DTO 参数验证注解支持
+        - spring-boot-starter-test: 测试相关依赖（scope test）
+        - h2: 测试时使用内存数据库（scope test）
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-thymeleaf</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <!-- Jsoup：用于静态页面解析，抓取价格/评论等简单数据 -->
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.16.2</version>
+        </dependency>
+        <dependency>
+            <!-- springdoc-openapi：自动生成 OpenAPI 文档并提供 Swagger UI，AI 前端生成依赖该端点 -->
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.1.0</version>
+        </dependency>
+        <dependency>
+            <!-- 参数校验依赖：用于 DTO 上的 @NotBlank 等注解 -->
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- Test utilities -->
+        <dependency>
+            <!-- 测试相关：包含 JUnit, MockMvc 等 -->
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- 测试时使用的内存数据库 H2，避免单元测试依赖外部 Postgres -->
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Selenium omitted from runtime skeleton; add when needed -->
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
