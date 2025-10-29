@@ -158,3 +158,123 @@
 * 钉钉警报（价格、差评、库存）推送功能稳定。
 * AI已成功生成一个可用的前端界面（仪表盘、详情页、登录页）。
 * 已成功在**线上服务器**（美国）通过Docker Compose部署，并集成了**付费住宅代理**。
+
+## 使用指南（详细步骤）
+
+下面给出在本地开发、测试和生产部署的详细步骤，包含数据库初始化、配置说明和如何启用图片二进制 MD5 计算。
+
+### 环境要求
+1. Java 17+
+2. Maven 3.8+
+3. Docker & Docker Compose（用于生产/集成部署）
+4. 可选：有外网访问或代理配置用于抓取真实页面
+
+### 本地开发（快速启动）
+1. 克隆仓库并切换到开发分支 `dev`：
+
+```bash
+git clone <repo-url>
+cd AMZ_Project-Spyglass
+git checkout dev
+```
+
+2. 构建并运行单元测试：
+
+```bash
+mvn -f spyglass-backend/pom.xml -DskipTests=false test
+```
+
+3. 使用内存数据库运行应用（开发模式）：
+
+```bash
+mvn -f spyglass-backend/pom.xml spring-boot:run
+```
+
+4. 打开浏览器访问：
+ - Swagger UI: http://localhost:8080/swagger-ui.html 或 /swagger-ui/index.html
+ - OpenAPI JSON: http://localhost:8080/v3/api-docs
+
+### 数据库初始化（PostgreSQL）
+1. 在生产或开发环境中启动 PostgreSQL（Docker 示例）：
+
+```bash
+docker run --name spyglass-postgres -e POSTGRES_USER=spyglass -e POSTGRES_PASSWORD=spyglass -e POSTGRES_DB=spyglass -p 5432:5432 -d postgres:15
+```
+
+2. 运行 SQL 建表脚本（`sql/schema.sql`）：
+
+```bash
+psql -h localhost -U spyglass -d spyglass -f sql/schema.sql
+```
+
+3. 在 `spyglass-backend/src/main/resources/application.yml` 或 环境变量中配置数据库连接：
+
+```yaml
+spring:
+    datasource:
+        url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:spyglass}
+        username: ${DB_USER:spyglass}
+        password: ${DB_PASS:spyglass}
+```
+
+### 生产部署（Docker Compose 快速部署）
+1. 修改 `docker-compose.yml` 中的环境变量以匹配你的生产配置（DB 密码、代理 Key、JWT 密钥等）。
+2. 启动服务：
+
+```bash
+docker compose up --build -d
+```
+
+3. 检查日志并确认服务运行正常：
+
+```bash
+docker compose logs -f
+```
+
+### 配置代理与开启图片二进制下载
+1. 在环境变量或 `application.yml` 中配置代理：
+
+```yaml
+proxy:
+    enabled: true
+    host: your.proxy.host
+    port: 12345
+    username: "proxy-user" # 可选
+    password: "proxy-pass" # 可选
+
+scraper:
+    downloadImageBinary: false # 默认 false，测试/CI 推荐保持关闭
+    imageDownloadTimeoutMs: 5000
+```
+
+2. 说明：如果你想计算真实图片二进制 MD5，请设置 `scraper.downloadImageBinary=true`。生产环境强烈建议同时配置可用的代理以保证抓取稳定性。
+
+### 运行调度器手动触发（测试）
+当前 Scheduler 在 `dev` 环境会按配置的间隔自动运行。你也可手动触发（例如调用内部 API 或在应用中添加测试端点）。
+
+## 分支策略与版本发布
+
+- 开发分支：`dev` — 日常开发在此分支进行，所有功能开发与单元测试在 `dev` 上完成。
+- 生成/发布分支：`main` — 所有经过测试且 CI 通过的变更由 `dev` 合并（PR）到 `main` 后，`main` 被视为可部署的生产分支。
+- 发布流程：
+    1. 在 `dev` 上完成开发并确保本地/CI 测试全部通过。
+    2. 提交 PR 将 `dev` 合并到 `main`，CI 会在 `main` 上再次运行测试。
+    3. 合并并打 Tag，例如：`git tag -a V1.0.0 -m "Release V1.0.0"`，然后推送 Tag 到远程：`git push origin V1.0.0`。
+
+当前系统版本命名：V1.0.0
+
+## 如何提交变更（Git 约定）
+1. 在 `dev` 分支上提交开发变更：
+
+```bash
+git checkout dev
+git pull origin dev
+git checkout -b feat/your-feature-name
+# 开发、提交、推送
+git push origin feat/your-feature-name
+```
+
+2. 创建 Pull Request 到 `dev`（若有多人协作，可在 dev 上进行代码审查）；当 dev 准备好发布时，再创建 PR 从 `dev` 到 `main`。
+
+## 结语
+本次版本 V1.0.0 已实现核心功能的最小可行实现（包括抓取、历史存储、告警触发、代理抽象和 OpenAPI 支持）。下一步可在 `dev` 分支继续完善 Selenium 抓取、差评抽取、前端展示和告警模板的精细化。
