@@ -1,0 +1,11 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:postgres}:${DB_PORT:5432}/${DB_NAME:spyglass}
+    username: ${DB_USER:spyglass}
+    password: ${DB_PASS:spyglass}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+server:
+  port: ${PORT:8080}
