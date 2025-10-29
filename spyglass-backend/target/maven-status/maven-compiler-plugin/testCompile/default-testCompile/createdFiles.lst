@@ -1,3 +1,4 @@
 com/amz/spyglass/scraper/ScrapeParserTest.class
+com/amz/spyglass/scraper/ImageDownloaderTest.class
 com/amz/spyglass/controller/AsinControllerTest.class
 com/amz/spyglass/controller/AsinHistoryControllerTest.class

@@ -1,6 +1,8 @@
 package com.amz.spyglass.scraper;
 
 import com.amz.spyglass.config.ProxyProperties;
+import com.amz.spyglass.config.ScraperProperties;
+import java.util.Optional;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -19,9 +21,13 @@ import java.time.Duration;
 public class JsoupScraper implements Scraper {
 
     private final ProxyProperties proxyProperties;
+    private final ScraperProperties scraperProperties;
+    private final com.amz.spyglass.scraper.ImageDownloader imageDownloader;
 
-    public JsoupScraper(ProxyProperties proxyProperties) {
+    public JsoupScraper(ProxyProperties proxyProperties, ScraperProperties scraperProperties, com.amz.spyglass.scraper.ImageDownloader imageDownloader) {
         this.proxyProperties = proxyProperties;
+        this.scraperProperties = scraperProperties;
+        this.imageDownloader = imageDownloader;
     }
 
     @Override
@@ -72,6 +78,27 @@ public class JsoupScraper implements Scraper {
         Document doc = conn.get();
         AsinSnapshot s = ScrapeParser.parse(doc);
         s.setSnapshotAt(java.time.Instant.now());
+
+        // 如果启用了二进制图片下载，则尝试下载图片并计算真实 MD5，失败时回退到 URL 的 MD5（由解析器已计算）
+        if (scraperProperties != null && scraperProperties.isDownloadImageBinary()) {
+            String imgUrl = null;
+            // 从解析结果或 DOM 再取一次主图 URL
+            // 解析器可能已把 imageMd5 填为 URL 的 MD5；这里我们尝试从 DOM 获取 src
+            try {
+                org.jsoup.nodes.Element img = doc.selectFirst("#landingImage, #imgTagWrapperId img, img#main-image, img#image-block img");
+                if (img != null) imgUrl = img.attr("src");
+            } catch (Exception ignored) {}
+
+            if (imgUrl != null && !imgUrl.isEmpty()) {
+                try {
+                    Optional<String> realMd5 = imageDownloader.downloadImageMd5(imgUrl);
+                    realMd5.ifPresent(s::setImageMd5);
+                } catch (Exception e) {
+                    // ignore and keep existing imageMd5
+                }
+            }
+        }
+
         return s;
     }
 }
