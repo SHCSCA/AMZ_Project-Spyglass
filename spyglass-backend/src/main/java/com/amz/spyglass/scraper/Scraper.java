@@ -18,5 +18,5 @@ public interface Scraper {
      * 抓取并解析页面，返回一个快照对象，包含 title/price/bsr/inventory/imageMd5/aplusMd5 等字段。
      * 实现可以选择不下载图片字节以避免额外网络依赖（当前 JsoupScraper 使用图片 URL 的 MD5 作为占位）。
      */
-    com.amz.spyglass.scraper.AsinSnapshot fetchSnapshot(String url) throws Exception;
+    com.amz.spyglass.scraper.AsinSnapshotDTO fetchSnapshot(String url) throws Exception;
 }

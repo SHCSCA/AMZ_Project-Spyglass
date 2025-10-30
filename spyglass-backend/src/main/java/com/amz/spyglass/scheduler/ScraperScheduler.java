@@ -1,7 +1,7 @@
 package com.amz.spyglass.scheduler;
 
-import com.amz.spyglass.model.Asin;
-import com.amz.spyglass.model.ScrapeTask;
+import com.amz.spyglass.model.AsinModel;
+import com.amz.spyglass.model.ScrapeTaskModel;
 import com.amz.spyglass.repository.AsinRepository;
 import com.amz.spyglass.repository.ScrapeTaskRepository;
 import com.amz.spyglass.service.ScraperService;
@@ -14,14 +14,42 @@ import org.springframework.context.annotation.Profile;
 
 import java.time.Instant;
 
+/**
+ * 抓取任务调度器
+ * 负责定时触发所有 ASIN 的抓取任务，包括以下功能：
+ * 1. 每隔固定时间（默认4小时）批量抓取所有 ASIN
+ * 2. 支持单个 ASIN 的异步抓取
+ * 3. 记录抓取任务状态和结果
+ * 4. 保存抓取快照到历史记录
+ * 
+ * @author AI
+ * @version 1.0.0
+ * @since 2025-10-30
+ */
 @Component
-@Profile("!test")
+@Profile("!test") // 测试环境下不启用调度器
 public class ScraperScheduler {
 
     private final Logger logger = LoggerFactory.getLogger(ScraperScheduler.class);
+    
+    /**
+     * ASIN 仓储服务，用于获取待抓取的 ASIN 列表
+     */
     private final AsinRepository asinRepository;
+    
+    /**
+     * 抓取服务，执行实际的页面抓取逻辑
+     */
     private final ScraperService scraperService;
+    
+    /**
+     * 抓取任务仓储服务，用于记录任务状态
+     */
     private final ScrapeTaskRepository scrapeTaskRepository;
+    
+    /**
+     * ASIN 历史记录仓储服务，用于保存抓取快照
+     */
     private final com.amz.spyglass.repository.AsinHistoryRepository asinHistoryRepository;
 
     public ScraperScheduler(AsinRepository asinRepository, ScraperService scraperService, ScrapeTaskRepository scrapeTaskRepository, com.amz.spyglass.repository.AsinHistoryRepository asinHistoryRepository) {
@@ -31,36 +59,53 @@ public class ScraperScheduler {
         this.asinHistoryRepository = asinHistoryRepository;
     }
 
-    // default every 4 hours (14400000 ms). Can be overridden with property scraper.fixedDelayMs
+    /**
+     * 批量执行所有 ASIN 的抓取任务
+     * 默认每4小时执行一次（14400000毫秒）
+     * 可通过配置项 scraper.fixedDelayMs 覆盖默认间隔
+     */
     @Scheduled(fixedDelayString = "${scraper.fixedDelayMs:14400000}")
     public void runAll() {
-        for (Asin a : asinRepository.findAll()) {
-            runForAsinAsync(a.getId());
+        logger.info("开始执行批量抓取任务...");
+        for (AsinModel asin : asinRepository.findAll()) {
+            runForAsinAsync(asin.getId());
         }
+        logger.info("批量抓取任务已全部提交到异步队列");
     }
 
+    /**
+     * 异步执行单个 ASIN 的抓取任务
+     * 任务执行过程：
+     * 1. 创建任务记录并设置为运行中
+     * 2. 调用抓取服务获取页面数据
+     * 3. 保存抓取快照到历史记录
+     * 4. 更新任务状态为成功或失败
+     *
+     * @param asinId ASIN记录的ID
+     */
     @Async
     public void runForAsinAsync(Long asinId) {
-        ScrapeTask task = new ScrapeTask();
+        logger.info("开始异步抓取任务, ASIN ID: {}", asinId);
+        ScrapeTaskModel task = new ScrapeTaskModel();
         task.setAsinId(asinId);
-        task.setStatus("RUNNING");
+        task.setStatus(ScrapeTaskModel.TaskStatus.RUNNING);
         task.setRunAt(Instant.now());
         scrapeTaskRepository.save(task);
 
         try {
             // placeholder: use scraperService to fetch title (real logic should fetch price, bsr, etc.)
-            Asin a = asinRepository.findById(asinId).orElseThrow();
+            AsinModel a = asinRepository.findById(asinId).orElseThrow();
             // 调用 ScraperService 获取完整的页面快照（包含 price/bsr/inventory/imageMd5/aplusMd5）
-            com.amz.spyglass.scraper.AsinSnapshot snap = scraperService.fetchSnapshot("https://www.amazon.com/dp/" + a.getAsin());
+            com.amz.spyglass.scraper.AsinSnapshotDTO snap = scraperService.fetchSnapshot("https://www.amazon.com/dp/" + a.getAsin());
 
-            task.setStatus("SUCCESS");
+            task.setStatus(ScrapeTaskModel.TaskStatus.SUCCESS);
             task.setMessage("title=" + (snap.getTitle() == null ? "" : snap.getTitle()));
             task.setRunAt(Instant.now());
             scrapeTaskRepository.save(task);
 
             // 保存历史快照到 AsinHistory 实体
             try {
-                com.amz.spyglass.model.AsinHistory h = new com.amz.spyglass.model.AsinHistory();
+                com.amz.spyglass.model.AsinHistoryModel h = new com.amz.spyglass.model.AsinHistoryModel();
                 h.setAsin(a);
                 h.setTitle(snap.getTitle());
                 h.setPrice(snap.getPrice());
@@ -75,7 +120,7 @@ public class ScraperScheduler {
             }
         } catch (Exception ex) {
             logger.error("scrape failed for asin {}", asinId, ex);
-            task.setStatus("FAILED");
+            task.setStatus(ScrapeTaskModel.TaskStatus.FAILED);
             task.setMessage(ex.getMessage());
             task.setRunAt(Instant.now());
             scrapeTaskRepository.save(task);

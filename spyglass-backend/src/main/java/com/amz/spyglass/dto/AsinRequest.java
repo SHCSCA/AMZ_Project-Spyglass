@@ -2,31 +2,39 @@ package com.amz.spyglass.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import lombok.Data;
 
 /**
- * DTO：AsinRequest（中文注释）
- * 用途：接收前端请求创建或更新 ASIN 的输入参数。
- * 验证规则：asin 与 site 不能为空，inventoryThreshold 必须提供（整型）。
+ * ASIN 创建/更新请求 DTO
+ * 用于接收前端请求创建或更新 ASIN 监控项的输入参数
+ *
+ * @author AI
+ * @version 1.0.0
+ * @since 2025-10-29
  */
+@Data
 public class AsinRequest {
 
-    @NotBlank
+    /**
+     * Amazon 标准识别号，不可为空
+     */
+    @NotBlank(message = "ASIN 不能为空")
     private String asin;
 
-    @NotBlank
+    /**
+     * 站点代码（如 US、UK），不可为空
+     */
+    @NotBlank(message = "站点代码不能为空")
     private String site;
 
+    /**
+     * 自定义昵称，可选
+     */
     private String nickname;
 
-    @NotNull
+    /**
+     * 库存预警阈值，不可为空
+     */
+    @NotNull(message = "库存预警阈值不能为空")
     private Integer inventoryThreshold;
-
-    public String getAsin() { return asin; }
-    public void setAsin(String asin) { this.asin = asin; }
-    public String getSite() { return site; }
-    public void setSite(String site) { this.site = site; }
-    public String getNickname() { return nickname; }
-    public void setNickname(String nickname) { this.nickname = nickname; }
-    public Integer getInventoryThreshold() { return inventoryThreshold; }
-    public void setInventoryThreshold(Integer inventoryThreshold) { this.inventoryThreshold = inventoryThreshold; }
 }

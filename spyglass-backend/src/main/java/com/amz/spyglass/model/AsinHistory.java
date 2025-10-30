@@ -1,119 +1,89 @@
 package com.amz.spyglass.model;
 
 import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.Instant;
 
 /**
- * ASIN 历史快照实体（中文注释）
- * 用于保存每次抓取的快照数据，例如价格、BSR、库存、图片 MD5、A+ MD5 等。
- * 为了简单，当前只保存 title 和 snapshotAt；后续可以扩展更多字段。
+ * ASIN 历史快照实体
+ * 用于保存每次抓取的快照数据，包括价格、BSR、库存、图片MD5、A+内容MD5等
+ * 
+ * @author AI
+ * @version 1.0.0
+ * @since 2025-10-29
  */
+@Getter
+@Setter
+@NoArgsConstructor
 @Entity
 @Table(name = "asin_history")
-public class AsinHistory {
+public class AsinHistoryModel extends BaseEntityModel {
 
+    /**
+     * 主键ID
+     */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // 与 Asin 的多对一关系
+    /**
+     * 关联的 ASIN 实体
+     */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "asin_id")
+    @JoinColumn(name = "asin_id", nullable = false)
     private Asin asin;
 
-    // 页面标题（示例字段）
+    /**
+     * 商品标题
+     */
+    @Column(columnDefinition = "TEXT")
     private String title;
 
-    // 价格（保留两位小数），可为空
+    /**
+     * 当前价格（Buybox价格）
+     */
+    @Column(precision = 14, scale = 2)
     private BigDecimal price;
 
-    // BSR（可为空）
+    /**
+     * Best Seller Rank排名
+     */
     private Integer bsr;
 
-    // 库存数量快照（可为空）
+    /**
+     * 预估库存数量
+     */
     private Integer inventory;
 
-    // 主图 MD5（可为空）
+    /**
+     * 主图MD5哈希值
+     */
+    @Column(length = 64)
     private String imageMd5;
 
-    // A+ 内容 MD5（可为空）
+    /**
+     * A+页面内容MD5哈希值
+     */
+    @Column(length = 64)
     private String aplusMd5;
 
-    // 抓取时间戳
+    /**
+     * 总评论数
+     */
+    private Integer totalReviews;
+
+    /**
+     * 平均评分
+     */
+    @Column(precision = 2, scale = 1)
+    private BigDecimal avgRating;
+
+    /**
+     * 快照时间
+     */
+    @Column(nullable = false)
     private Instant snapshotAt;
-
-    // --- getters / setters ---
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public Asin getAsin() {
-        return asin;
-    }
-
-    public void setAsin(Asin asin) {
-        this.asin = asin;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
-    }
-
-    public BigDecimal getPrice() {
-        return price;
-    }
-
-    public void setPrice(BigDecimal price) {
-        this.price = price;
-    }
-
-    public Integer getBsr() {
-        return bsr;
-    }
-
-    public void setBsr(Integer bsr) {
-        this.bsr = bsr;
-    }
-
-    public Integer getInventory() {
-        return inventory;
-    }
-
-    public void setInventory(Integer inventory) {
-        this.inventory = inventory;
-    }
-
-    public String getImageMd5() {
-        return imageMd5;
-    }
-
-    public void setImageMd5(String imageMd5) {
-        this.imageMd5 = imageMd5;
-    }
-
-    public String getAplusMd5() {
-        return aplusMd5;
-    }
-
-    public void setAplusMd5(String aplusMd5) {
-        this.aplusMd5 = aplusMd5;
-    }
-
-    public Instant getSnapshotAt() {
-        return snapshotAt;
-    }
-
-    public void setSnapshotAt(Instant snapshotAt) {
-        this.snapshotAt = snapshotAt;
-    }
 }

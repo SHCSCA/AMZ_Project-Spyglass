@@ -1,2 +1,447 @@
-# AMZ_Project-Spyglass
-亚马逊竞品信息自动搜集预警系统
+# 产品需求文档 (PRD): 亚马逊竞品情报局 (Project Spyglass) V1.0
+
+| 文档版本 | V1.0 |
+| :--- | :--- |
+| **项目名称** | 亚马逊竞品情报局 (Project Spyglass) |
+| **创建日期** | 2025年10月29日 |
+| **产品负责人** | (你的名字) |
+| **目标** | 打造一个7x24小时运行的自动化竞品监控引擎，通过API驱动和AI辅助的UI，为亚马逊运营团队提供关键决策情报并解放生产力。 |
+
+---
+
+## 1. 简介
+
+### 1.1. 问题陈述 (The Problem)
+
+亚马逊运营团队目前依赖**手动、重复**的劳动来跟踪竞品。这包括每天打开数十个ASIN页面，检查价格变动、新差评、BSR排名和库存情况。这个过程极其耗时、容易出错、缺乏数据沉淀（无法回溯历史），并且总是**被动响应**而非**主动预警**。
+
+### 1.2. 解决方案 (The Solution)
+
+“竞品情报局” (Project Spyglass) 是一个内部SaaS工具。它通过**自动化Web爬虫**（非官方API）模拟用户行为，7x24小时不间断地抓取、存储和分析竞品数据。系统将通过一个**现代Web界面**（由AI辅助生成）展示历史趋势，并通过**即时通讯工具**（如钉钉）发送**主动警报**。
+
+### 1.3. 核心目标 (Goals & Objectives)
+
+1.  **效率提升：** 释放运营团队每天至少1-2小时的手动跟踪时间。
+2.  **主动决策：** 将团队从“被动查看”转变为“主动收到警报”，在竞品行动（如调价、断货）的**第一时间**做出反应。
+3.  **数据沉淀：** 建立竞品历史数据库，用于复盘和战略分析，而不仅仅是“看一眼就忘”。
+
+### 1.4. 范围 (Scope)
+
+| V1.0 范围内 (In-Scope) | V1.0 范围外 (Out-of-Scope) |
+| :--- | :--- |
+| ✅ 基于Web爬虫的数据抓取 | ❌ 任何官方亚马逊SP-API/MWS的集成 |
+| ✅ 关键数据点（价格、BSR、评论、库存、A+、主图）| ❌ 自动化亚马逊后台操作（如自动调价） |
+| ✅ 历史数据存储和图表化展示 | ❌ 抓取关键词搜索排名 (V2.0 考虑) |
+| ✅ 主动警报推送（钉钉） | ❌ 复杂的权限管理（V1.0 只有管理员/用户） |
+| ✅ API First 架构（Spring Boot RESTful API） | ❌ 抓取亚马逊以外的平台（如eBay, Walmart） |
+| ✅ AI辅助生成的Web前端（React/Vue） | |
+
+---
+
+## 2. 用户画像与核心场景 (User Personas & Stories)
+
+### 2.1. 用户画像
+
+* **画像1：Alex（亚马逊运营）**
+    * **角色：** 团队的核心运营，负责2-3个核心产品线。
+    * **痛点：** “我每天早上要花1小时开20个竞品Tab页，生怕他们降价或上了差评我不知道。我受够了复制粘贴到Excel里。”
+    * **需求：** “我需要一个仪表盘，一眼就能看到所有竞品‘昨天发生了什么’。并且，如果他们有动作，立刻通知我！”
+
+* **画像2：Sam（系统管理员 - 即你）**
+    * **角色：** 开发者，负责工具的维护和部署。
+    * **痛点：** “我需要系统稳定，并且在添加新功能时，不需要重构所有东西。”
+    * **需求：** “我需要清晰的API、良好的日志、简单的部署方式（Docker）。”
+
+### 2.2. 用户故事 (User Stories)
+
+| 优先级 | 作为... (Persona) | 我想要... (Action) | 以便我能... (Goal) |
+| :--- | :--- | :--- | :--- |
+| **P0** | Alex (运营) | 登录系统并看到一个仪表盘，列出我所有监控的ASIN | 快速了解大盘情况。 |
+| **P0** | Alex (运营) | 在仪表盘上看到哪些ASIN**发生了变化**（如价格、差评） | 优先处理最重要的信息。 |
+| **P0** | Alex (运营) | 添加一个新的竞品ASIN进行监控 | 扩展我的情报网络。 |
+| **P0** | Alex (运营) | 当一个竞品**价格变动**或**库存低于阈值**时 | **立即**在我的钉钉群里收到通知。 |
+| **P1** | Alex (运营) | 当一个竞品**获得了新的1-3星差评**时 | **立即**收到通知，并查看差评内容，以便分析他们的弱点。 |
+| **P1** | Alex (运营) | 点击任意一个ASIN，查看它的**历史价格和BSR曲线** | 分析它的长期策略和销售趋势。 |
+| **P1** | Sam (管理员) | 通过**API文档**（Swagger）来测试后端 | 确保后端按预期工作，并指导AI生成前端。 |
+| **P2** | Alex (运营) | 收到竞品**主图或A+内容变更**的警报 | 了解他们是否在测试新的营销素材。 |
+
+---
+
+## 3. 功能需求 (Functional Requirements)
+
+### F-MOD-1: 认证 & 安全 (Auth)
+
+* **F-AUTH-001:** 系统必须提供基于用户名和密码的登录功能。
+* **F-AUTH-002:** 密码必须在数据库中**加密存储**（例如使用BCrypt）。
+* **F-AUTH-003:** 登录成功后，后端必须返回一个**JWT (JSON Web Token)**，用于后续所有API请求的身份验证。
+* **F-AUTH-004:** 所有非登录/注册的API端点必须受到JWT保护。
+
+### F-MOD-2: ASIN管理 (Management)
+
+* **F-ASIN-001 (仪表盘):** 用户登录后，应看到一个“ASIN列表”仪表盘。
+* **F-ASIN-002 (列表项):** 列表中的每一项应展示ASIN的**最新关键数据**：名称、ASIN、主图、当前价格、当前BSR、评论数、预估库存。
+* **F-ASIN-003 (警报标识):** 列表项必须有明显的**视觉标识**，表明该ASIN在最近一次抓取中是否触发了警报（如价格变动、新差评）。
+* **F-ASIN-004 (添加ASIN):** 用户必须能通过一个表单添加新的ASIN。
+    * **输入字段：** ASIN (字符串), 站点 (下拉框: US, UK等), 昵称 (字符串), 库存警报阈值 (数字)。
+* **F-ASIN-005 (删除ASIN):** 用户必须能从仪表盘中删除一个ASIN，停止对它的监控。
+* **F-ASIN-006 (详情页):** 点击列表中的任意ASIN，应跳转到该ASIN的“详情页”。
+
+### F-MOD-3: 爬虫引擎 (Scraper Engine) - (后端)
+
+* **F-SCRAPE-001 (定时调度):** 系统必须有一个定时任务调度器（如 `@Scheduled`），按预设频率（例如：每4小时）自动为列表中的所有ASIN执行抓取。
+* **F-SCRAPE-002 (异步执行):** 抓取任务必须是异步的（如 `@Async`），确保单个ASIN的抓取失败（如被屏蔽）不会阻塞整个队列。
+* **F-SCRAPE-003 (代理集成 - 关键):** **所有**对亚马逊的HTTP/S请求**必须**通过**旋转住宅IP代理服务**（如 Bright Data）发出。
+* **F-SCRAPE-004 (静态抓取 - Jsoup):** 引擎必须能抓取以下静态数据：
+    * 价格 (Buybox价格)
+    * BSR (大类目排名)
+    * 评论总数
+    * 平均星级
+    * 主图URL (用于MD5 HASH对比)
+    * A+ 内容区域的原始HTML (用于MD5 HASH对比)
+* **F-SCRAPE-005 (动态抓取 - Selenium):** 引擎必须能使用Selenium模拟浏览器行为，执行“999加购法”来抓取**预估库存**。
+* **F-SCRAPE-006 (差评抓取):** 引擎必须能抓取最新10条评论，并筛选出1-3星的评论（包括内容和日期）。
+* **F-SCRAPE-007 (数据存储):** 每次抓取成功后，所有数据点（价格、BSR、库存等）必须连同**时间戳**一起存入PostgreSQL数据库。
+
+### F-MOD-4: 警报与数据 (Alert & Data Engine)
+
+* **F-DATA-001 (数据对比):** 在每次新数据（F-SCRAPE-007）存入后，系统必须立即将其与**上一次**的抓取数据进行对比。
+* **F-DATA-002 (警报触发器 - 价格):** `newPrice != oldPrice` -> 触发警报。
+* **F-DATA-003 (警报触发器 - 库存):** `newInventory < inventoryThreshold` (F-ASIN-004中设置的阈值) -> 触发警报。
+* **F-DATA-004 (警报触发器 - 差评):** `newNegativeReview` (在数据库中未见过的差评) -> 触发警报。
+* **F-DATA-005 (警报触发器 - 主图):** `MD5(newImageUrl) != MD5(oldImageUrl)` -> 触发警报。
+* **F-DATA-006 (警报触发器 - A+):** `MD5(newAplusHtml) != MD5(oldAplusHtml)` -> 触发警报。
+* **F-DATA-007 (推送器 - 钉钉):** 所有被触发的警报，必须被格式化为人类可读的消息，并通过**钉钉机器人Webhook**推送到指定群组。
+* **F-DATA-008 (历史曲线):** ASIN详情页（F-ASIN-006）必须能调用API，获取该ASIN的**历史数据**（价格、BSR、库存），并在前端使用**图表库 (Chart.js)** 绘制成折线图。
+
+### F-MOD-5: API 端点 (API Endpoints) - (供AI生成前端使用)
+
+* **F-API-001 (OpenAPI):** 系统必须使用 `springdoc-openapi` 自动生成 `/v3/api-docs` (OpenAPI 3.0 JSON) 规范，这是AI生成前端的**核心输入**。
+* **F-API-002 (Auth):**
+    * `POST /api/auth/login` (登录, 返回JWT)
+    * `POST /api/auth/register` (注册)
+* **F-API-003 (ASIN Management):** (受JWT保护)
+    * `GET /api/asin` (获取所有ASIN的仪表盘列表)
+    * `POST /api/asin` (添加新ASIN)
+    * `DELETE /api/asin/{id}` (删除ASIN)
+    * `PUT /api/asin/{id}/config` (修改ASIN配置)
+* **F-API-004 (Data Query):** (受JWT保护)
+    * `GET /api/data/asin/{id}` (获取单个ASIN的详细信息，用于详情页)
+    * `GET /api/data/asin/{id}/history?range=30d` (获取ASIN的历史数据，用于图表)
+    * `GET /api/data/alerts` (获取全局警报日志列表)
+
+---
+
+## 4. 非功能性需求 (Non-Functional Requirements, NFRs)
+
+| 类别 | 需求 (NFR) |
+| :--- | :--- |
+| **性能** | **NFR-P-001:** API 响应时间 (非爬虫) 必须在 500ms 以下。 |
+| | **NFR-P-002:** 仪表盘页面 (UI) 加载时间必须在 3 秒以下。 |
+| | **NFR-P-003:** 单个ASIN的全量抓取（含Selenium）应在 90 秒内完成。 |
+| **安全** | **NFR-S-001:** 所有Web流量必须使用 **HTTPS (SSL)**。 |
+| | **NFR-S-002:** 所有敏感密钥（数据库密码、JWT密钥、代理APIKey、钉钉Webhook）**绝不能**硬编码在代码中，必须使用环境变量或 `.properties` 文件注入。 |
+| **可靠性** | **NFR-R-001:** 爬虫必须有**重试机制**（如抓取失败，30分钟后重试1次）。 |
+| | **NFR-R-002:** 系统应7x24小时运行，Docker容器必须配置为 `restart: always`。 |
+| | **NFR-R-003:** 数据库数据必须**持久化**（使用Docker Volume）。 |
+| **部署** | **NFR-D-001:** 整个应用（后端、数据库、Nginx）必须通过 `docker-compose.yml` **一键编排**。 |
+| | **NFR-D-002:** Nginx必须配置为反向代理：`your.domain.com/` 指向前端静态文件，`your.domain.com/api/` 指向Spring Boot后端。 |
+| **可用性** | **NFR-U-001:** （针对AI生成的UI）界面必须简洁、直观，无需培训即可上手。 |
+| | **NFR-U-002:** （针对AI生成的UI）界面必须是**响应式**的，支持在移动设备上查看。 |
+
+---
+
+## 5. V1.0 启动标准
+
+* 所有 **P0** 和 **P1** 级别的用户故事均已实现并通过测试。
+* F-MOD-1, F-MOD-2, F-MOD-3, F-MOD-4, F-MOD-5 中定义的核心功能均已实现。
+* `springdoc-openapi` 文档已自动生成且内容准确。
+* 钉钉警报（价格、差评、库存）推送功能稳定。
+* AI已成功生成一个可用的前端界面（仪表盘、详情页、登录页）。
+* 已成功在**线上服务器**（美国）通过Docker Compose部署，并集成了**付费住宅代理**。
+
+## 使用指南（详细步骤）
+
+下面给出在本地开发、测试和生产部署的详细步骤，包含数据库初始化、配置说明和代理设置等关键点。
+
+### 环境要求
+1. Java 17+
+2. Maven 3.8+
+3. Docker & Docker Compose (用于生产/集成部署)
+4. MySQL 8.0+ (本地开发可选)
+5. 可选：有外网访问或代理配置用于抓取真实页面
+
+### 本地开发（快速启动）
+1. 克隆仓库并切换到开发分支：
+```bash
+git clone https://github.com/SHCSCA/AMZ_Project-Spyglass.git
+cd AMZ_Project-Spyglass
+git checkout dev
+```
+
+2. 配置 MySQL 数据库：
+```bash
+# 使用 Docker 启动 MySQL（如果没有本地 MySQL）
+docker run --name spyglass-mysql \
+  -e MYSQL_USER=spyglass \
+  -e MYSQL_PASSWORD=your_password \
+  -e MYSQL_DATABASE=amzspaglass \
+  -e MYSQL_ROOT_PASSWORD=root_password \
+  -p 3306:3306 \
+  -d mysql:8.0
+```
+
+3. 配置应用程序（创建 `application-local.yml`）：
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/amzspaglass?useSSL=false&serverTimezone=UTC
+    username: spyglass
+    password: your_password
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+
+proxy:
+  enabled: false  # 本地开发时可以禁用代理
+  host: your.proxy.host  # 生产环境必须配置
+  port: 12345
+  username: proxy-user  # 可选
+  password: proxy-pass  # 可选
+
+scraper:
+  downloadImageBinary: false  # 开发环境建议关闭
+  imageDownloadTimeoutMs: 5000
+  scheduleEnabled: true  # 是否启用自动调度
+  intervalMinutes: 240  # 每4小时执行一次
+
+dingtalk:
+  webhook: https://oapi.dingtalk.com/robot/send?access_token=your_token
+  secret: your_secret  # 钉钉加签密钥
+```
+
+4. 构建并运行单元测试：
+```bash
+mvn -f spyglass-backend/pom.xml clean test
+```
+
+5. 运行应用程序（开发模式）：
+```bash
+mvn -f spyglass-backend/pom.xml spring-boot:run -Dspring.profiles.active=local
+```
+
+6. 验证服务是否正常运行：
+   - Swagger UI: http://localhost:8080/swagger-ui.html
+   - OpenAPI JSON: http://localhost:8080/v3/api-docs
+   - H2 控制台: http://localhost:8080/h2-console (仅当使用 H2 内存数据库时)
+
+### 生产部署（Docker Compose）
+1. 创建环境变量文件 `.env`：
+```plaintext
+MYSQL_HOST=your_mysql_host
+MYSQL_PORT=3306
+MYSQL_DATABASE=amzspaglass
+MYSQL_USER=spyglass
+MYSQL_PASSWORD=your_secure_password
+PROXY_HOST=your.proxy.host
+PROXY_PORT=12345
+PROXY_USERNAME=proxy-user
+PROXY_PASSWORD=proxy-pass
+DINGTALK_WEBHOOK=your_webhook_url
+DINGTALK_SECRET=your_secret
+```
+
+2. 启动所有服务：
+```bash
+docker compose up -d
+```
+
+3. 检查服务状态和日志：
+```bash
+# 查看所有容器状态
+docker compose ps
+
+# 查看应用日志
+docker compose logs -f backend
+
+# 查看MySQL日志
+docker compose logs -f mysql
+```
+
+### 常见故障排除
+1. 数据库连接问题：
+   - 检查 MySQL 服务是否运行：`docker compose ps`
+   - 验证连接信息：`mysql -h localhost -u spyglass -p`
+   - 检查防火墙设置：确保端口 3306 开放
+
+2. 代理配置问题：
+   - 测试代理连接：`curl -x proxy:port http://example.com`
+   - 确认代理凭证正确性
+   - 检查 application.yml 中的代理配置
+
+3. 爬虫相关问题：
+   - 检查日志中的 HTTP 状态码
+   - 验证代理 IP 轮转是否正常
+   - 确认目标网站是否有反爬虫措施
+
+### API 使用示例
+1. 添加新的监控 ASIN：
+```bash
+curl -X POST http://localhost:8080/api/asin \
+  -H "Content-Type: application/json" \
+  -d '{"asin":"B0123456789","site":"US","nickname":"示例商品","inventoryThreshold":100}'
+```
+
+2. 手动触发抓取：
+```bash
+curl -X POST http://localhost:8080/api/scraper/trigger/B0123456789
+```
+
+3. 查询历史数据：
+```bash
+curl http://localhost:8080/api/data/asin/B0123456789/history?range=30d
+```
+
+### 开发指南与约定
+1. 代码提交规范：
+   - 遵循 Angular commit message 格式
+   - 每个功能变更创建独立分支
+   - 提交前运行单元测试
+
+2. 数据库变更：
+   - 所有 DDL 通过 Flyway migration
+   - 表名使用小写下划线命名
+   - 必须包含 created_at/updated_at 审计字段
+   - 所有表和字段添加中文注释
+
+3. API 开发规范：
+   - 遵循 RESTful 设计原则
+   - 使用 DTO 对象封装请求/响应
+   - 添加 OpenAPI 注解文档
+   - 实现统一的异常处理
+
+4. 爬虫开发注意事项：
+   - 必须支持代理配置
+   - 实现请求重试机制
+   - 使用 MDC 记录跟踪日志
+   - 注意规避反爬虫检测（详细步骤）
+
+下面给出在本地开发、测试和生产部署的详细步骤，包含数据库初始化、配置说明和如何启用图片二进制 MD5 计算。
+
+### 环境要求
+1. Java 17+
+2. Maven 3.8+
+3. Docker & Docker Compose（用于生产/集成部署）
+4. 可选：有外网访问或代理配置用于抓取真实页面
+
+### 本地开发（快速启动）
+1. 克隆仓库并切换到开发分支 `dev`：
+
+```bash
+git clone <repo-url>
+cd AMZ_Project-Spyglass
+git checkout dev
+```
+
+2. 构建并运行单元测试：
+
+```bash
+mvn -f spyglass-backend/pom.xml -DskipTests=false test
+```
+
+3. 使用内存数据库运行应用（开发模式）：
+
+```bash
+mvn -f spyglass-backend/pom.xml spring-boot:run
+```
+
+4. 打开浏览器访问：
+ - Swagger UI: http://localhost:8080/swagger-ui.html 或 /swagger-ui/index.html
+ - OpenAPI JSON: http://localhost:8080/v3/api-docs
+
+### 数据库初始化（PostgreSQL）
+1. 在生产或开发环境中启动 PostgreSQL（Docker 示例）：
+
+```bash
+docker run --name spyglass-postgres -e POSTGRES_USER=spyglass -e POSTGRES_PASSWORD=spyglass -e POSTGRES_DB=spyglass -p 5432:5432 -d postgres:15
+```
+
+2. 运行 SQL 建表脚本（`sql/schema.sql`）：
+
+```bash
+psql -h localhost -U spyglass -d spyglass -f sql/schema.sql
+```
+
+3. 在 `spyglass-backend/src/main/resources/application.yml` 或 环境变量中配置数据库连接：
+
+```yaml
+spring:
+    datasource:
+        url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:spyglass}
+        username: ${DB_USER:spyglass}
+        password: ${DB_PASS:spyglass}
+```
+
+### 生产部署（Docker Compose 快速部署）
+1. 修改 `docker-compose.yml` 中的环境变量以匹配你的生产配置（DB 密码、代理 Key、JWT 密钥等）。
+2. 启动服务：
+
+```bash
+docker compose up --build -d
+```
+
+3. 检查日志并确认服务运行正常：
+
+```bash
+docker compose logs -f
+```
+
+### 配置代理与开启图片二进制下载
+1. 在环境变量或 `application.yml` 中配置代理：
+
+```yaml
+proxy:
+    enabled: true
+    host: your.proxy.host
+    port: 12345
+    username: "proxy-user" # 可选
+    password: "proxy-pass" # 可选
+
+scraper:
+    downloadImageBinary: false # 默认 false，测试/CI 推荐保持关闭
+    imageDownloadTimeoutMs: 5000
+```
+
+2. 说明：如果你想计算真实图片二进制 MD5，请设置 `scraper.downloadImageBinary=true`。生产环境强烈建议同时配置可用的代理以保证抓取稳定性。
+
+### 运行调度器手动触发（测试）
+当前 Scheduler 在 `dev` 环境会按配置的间隔自动运行。你也可手动触发（例如调用内部 API 或在应用中添加测试端点）。
+
+## 分支策略与版本发布
+
+- 开发分支：`dev` — 日常开发在此分支进行，所有功能开发与单元测试在 `dev` 上完成。
+- 生成/发布分支：`main` — 所有经过测试且 CI 通过的变更由 `dev` 合并（PR）到 `main` 后，`main` 被视为可部署的生产分支。
+- 发布流程：
+    1. 在 `dev` 上完成开发并确保本地/CI 测试全部通过。
+    2. 提交 PR 将 `dev` 合并到 `main`，CI 会在 `main` 上再次运行测试。
+    3. 合并并打 Tag，例如：`git tag -a V1.0.0 -m "Release V1.0.0"`，然后推送 Tag 到远程：`git push origin V1.0.0`。
+
+当前系统版本命名：V1.0.0
+
+## 如何提交变更（Git 约定）
+1. 在 `dev` 分支上提交开发变更：
+
+```bash
+git checkout dev
+git pull origin dev
+git checkout -b feat/your-feature-name
+# 开发、提交、推送
+git push origin feat/your-feature-name
+```
+
+2. 创建 Pull Request 到 `dev`（若有多人协作，可在 dev 上进行代码审查）；当 dev 准备好发布时，再创建 PR 从 `dev` 到 `main`。
+
+## 结语
+本次版本 V1.0.0 已实现核心功能的最小可行实现（包括抓取、历史存储、告警触发、代理抽象和 OpenAPI 支持）。下一步可在 `dev` 分支继续完善 Selenium 抓取、差评抽取、前端展示和告警模板的精细化。

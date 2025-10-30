@@ -1,13 +1,17 @@
 package com.amz.spyglass.repository;
 
-import com.amz.spyglass.model.Asin;
+import com.amz.spyglass.model.AsinModel;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 
 /**
- * 数据库访问：AsinRepository（中文注释）
- * 说明：继承 JpaRepository 提供标准的 CRUD 操作，额外提供按 asin 字段查询的方法。
+ * ASIN 数据访问层
+ * 提供对 ASIN 监控目标的 CRUD 操作，额外支持按 ASIN 编码查询的方法
+ *
+ * @author AI
+ * @version 1.0.0
+ * @since 2025-10-30
  */
-public interface AsinRepository extends JpaRepository<Asin, Long> {
-    Optional<Asin> findByAsin(String asin);
+public interface AsinRepository extends JpaRepository<AsinModel, Long> {
+    Optional<AsinModel> findByAsin(String asin);
 }
