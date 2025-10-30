@@ -1,6 +1,9 @@
 package com.amz.spyglass.scheduler;
 
 import com.amz.spyglass.model.AsinModel;
+import org.springframework.retry.annotation.EnableRetry;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import com.amz.spyglass.model.ScrapeTaskModel;
 import com.amz.spyglass.repository.AsinRepository;
 import com.amz.spyglass.repository.ScrapeTaskRepository;
@@ -28,6 +31,7 @@ import java.time.Instant;
  */
 @Component
 @Profile("!test") // 测试环境下不启用调度器
+@EnableRetry // 启用重试机制
 public class ScraperScheduler {
 
     private final Logger logger = LoggerFactory.getLogger(ScraperScheduler.class);
@@ -68,7 +72,11 @@ public class ScraperScheduler {
     public void runAll() {
         logger.info("开始执行批量抓取任务...");
         for (AsinModel asin : asinRepository.findAll()) {
-            runForAsinAsync(asin.getId());
+            try {
+                runForAsinAsync(asin.getId());
+            } catch (Exception ex) {
+                logger.error("Failed to schedule task for ASIN {}: {}", asin.getAsin(), ex.getMessage());
+            }
         }
         logger.info("批量抓取任务已全部提交到异步队列");
     }
@@ -77,14 +85,24 @@ public class ScraperScheduler {
      * 异步执行单个 ASIN 的抓取任务
      * 任务执行过程：
      * 1. 创建任务记录并设置为运行中
-     * 2. 调用抓取服务获取页面数据
+     * 2. 调用抓取服务获取页面数据（支持重试）
      * 3. 保存抓取快照到历史记录
      * 4. 更新任务状态为成功或失败
      *
      * @param asinId ASIN记录的ID
      */
     @Async
-    public void runForAsinAsync(Long asinId) {
+    @Retryable(
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 3600000), // 1小时后重试
+        include = { 
+            org.springframework.web.client.ResourceAccessException.class,
+            java.io.IOException.class,
+            org.openqa.selenium.TimeoutException.class,
+            Exception.class
+        }
+    )
+    public void runForAsinAsync(Long asinId) throws Exception {
         logger.info("开始异步抓取任务, ASIN ID: {}", asinId);
         ScrapeTaskModel task = new ScrapeTaskModel();
         task.setAsinId(asinId);
@@ -120,11 +138,22 @@ public class ScraperScheduler {
                 logger.warn("failed to save asin history for {}: {}", asinId, e.getMessage());
             }
         } catch (Exception ex) {
-            logger.error("scrape failed for asin {}", asinId, ex);
-            task.setStatus(ScrapeTaskModel.TaskStatus.FAILED);
-            task.setMessage(ex.getMessage());
-            task.setRunAt(Instant.now());
+            logger.error("scrape failed for asin {} (attempt {})", asinId, task.getRetryCount() + 1, ex);
+            task.setRetryCount(task.getRetryCount() + 1);
+            
+            // 如果重试次数达到上限，标记为失败；否则标记为待重试
+            if (task.getRetryCount() >= 3) {
+                task.setStatus(ScrapeTaskModel.TaskStatus.FAILED);
+                task.setMessage(ex.getMessage() + " (after " + task.getRetryCount() + " retries)");
+            } else {
+                task.setStatus(ScrapeTaskModel.TaskStatus.PENDING);
+                task.setMessage("将在1小时后重试 (attempt " + task.getRetryCount() + "/3)");
+                task.setRunAt(Instant.now().plusSeconds(3600)); // 1小时后重试
+            }
             scrapeTaskRepository.save(task);
+            
+            // 重新抛出异常以触发 Spring Retry
+            throw ex;
         }
     }
 }

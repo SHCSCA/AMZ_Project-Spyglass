@@ -37,6 +37,9 @@ public class AsinSnapshotDTO {
     // A+ 内容 MD5
     private String aplusMd5;
 
+    // 最新差评的 MD5（基于评论内容+时间计算，用于检测新差评）
+    private String latestNegativeReviewMd5;
+
     // 总评论数
     private Integer totalReviews;
 

@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS asin_history (
     inventory INT COMMENT '预估库存数量',
     bullet_points TEXT COMMENT '商品五点要点（feature bullets），多行文本，按抓取顺序换行存储',
     image_md5 VARCHAR(64) COMMENT '主图MD5哈希值',
+    latest_negative_review_md5 VARCHAR(64) COMMENT '最新差评的MD5哈希值',
     aplus_md5 VARCHAR(64) COMMENT 'A+页面内容MD5哈希值',
     total_reviews INT COMMENT '总评论数',
     avg_rating DECIMAL(2,1) COMMENT '平均评分',
