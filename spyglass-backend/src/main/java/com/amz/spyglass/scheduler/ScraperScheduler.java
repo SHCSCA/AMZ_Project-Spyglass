@@ -113,6 +113,7 @@ public class ScraperScheduler {
                 h.setInventory(snap.getInventory());
                 h.setImageMd5(snap.getImageMd5());
                 h.setAplusMd5(snap.getAplusMd5());
+                h.setBulletPoints(snap.getBulletPoints());
                 h.setSnapshotAt(snap.getSnapshotAt() == null ? Instant.now() : snap.getSnapshotAt());
                 asinHistoryRepository.save(h);
             } catch (Exception e) {

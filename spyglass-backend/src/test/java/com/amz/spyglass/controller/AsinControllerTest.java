@@ -1,6 +1,6 @@
 package com.amz.spyglass.controller;
 
-import com.amz.spyglass.model.Asin;
+import com.amz.spyglass.model.AsinModel;
 import com.amz.spyglass.repository.AsinRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

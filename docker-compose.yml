@@ -1,27 +1,28 @@
 version: "3.8"
 services:
-  postgres:
-    image: postgres:15
+  mysql:
+    image: mysql:8.0
     environment:
-      POSTGRES_DB: spyglass
-      POSTGRES_USER: spyglass
-      POSTGRES_PASSWORD: spyglass
+      MYSQL_DATABASE: amzspaglass
+      MYSQL_USER: amzspaglass
+      MYSQL_PASSWORD: RYna5tjK7nKwZd7J
+      MYSQL_ROOT_PASSWORD: rootpassword
+    ports:
+      - "3306:3306"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - mysqldata:/var/lib/mysql
 
   app:
     build:
       context: ./spyglass-backend
     depends_on:
-      - postgres
+      - mysql
     environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: spyglass
-      DB_USER: spyglass
-      DB_PASS: spyglass
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/amzspaglass?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
+      SPRING_DATASOURCE_USERNAME: amzspaglass
+      SPRING_DATASOURCE_PASSWORD: RYna5tjK7nKwZd7J
     ports:
       - "8080:8080"
 
 volumes:
-  pgdata:
+  mysqldata:
