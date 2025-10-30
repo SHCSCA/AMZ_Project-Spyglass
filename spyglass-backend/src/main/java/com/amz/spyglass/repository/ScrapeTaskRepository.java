@@ -12,4 +12,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * @since 2025-10-30
  */
 public interface ScrapeTaskRepository extends JpaRepository<ScrapeTaskModel, Long> {
+	/**
+	 * 根据 ASIN ID 查询最新一条任务记录
+	 * 基于创建时间倒序排序
+	 * @param asinId ASIN ID
+	 * @return 最新的任务记录，如果不存在则返回 null
+	 */
+	ScrapeTaskModel findFirstByAsinIdOrderByCreatedAtDesc(Long asinId);
+
 }
