@@ -25,9 +25,11 @@ public class TestController {
     private static final Logger logger = LoggerFactory.getLogger(TestController.class);
     
     private final ScraperService scraperService;
+    private final com.amz.spyglass.scraper.InventoryEstimator inventoryEstimator;
     
-    public TestController(ScraperService scraperService) {
+    public TestController(ScraperService scraperService, com.amz.spyglass.scraper.InventoryEstimator inventoryEstimator) {
         this.scraperService = scraperService;
+        this.inventoryEstimator = inventoryEstimator;
     }
     
     /**
@@ -89,5 +91,50 @@ public class TestController {
         health.put("timestamp", java.time.Instant.now());
         health.put("service", "Spyglass Backend");
         return ResponseEntity.ok(health);
+    }
+    
+    /**
+     * 测试999加购法库存估算
+     * 
+     * @param asin ASIN编码
+     * @param site 站点（默认US）
+     * @return 库存估算结果
+     */
+    @Operation(summary = "测试库存估算", description = "使用999加购法估算指定ASIN的库存（较慢，谨慎使用）")
+    @PostMapping("/inventory")
+    public ResponseEntity<?> testInventoryEstimation(
+            @Parameter(description = "ASIN编码", required = true, example = "B0XXXXXXXXX")
+            @RequestParam String asin,
+            @Parameter(description = "站点代码", example = "US")
+            @RequestParam(defaultValue = "US") String site) {
+        
+        logger.info("收到库存估算请求: ASIN={}, Site={}", asin, site);
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("asin", asin);
+        result.put("site", site);
+        result.put("timestamp", java.time.Instant.now());
+        
+        try {
+            Integer inventory = inventoryEstimator.estimateInventory(asin, site);
+            result.put("success", inventory != null);
+            result.put("inventory", inventory);
+            
+            if (inventory != null) {
+                logger.info("库存估算成功: {} -> {}", asin, inventory);
+            } else {
+                logger.warn("库存估算失败或未启用: {}", asin);
+                result.put("message", "库存估算失败，可能原因：功能未启用、商品不可购买、页面结构变化");
+            }
+            
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            logger.error("库存估算异常: {}", e.getMessage(), e);
+            result.put("success", false);
+            result.put("error", e.getMessage());
+            result.put("errorType", e.getClass().getSimpleName());
+            return ResponseEntity.status(500).body(result);
+        }
     }
 }

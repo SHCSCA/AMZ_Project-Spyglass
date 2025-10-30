@@ -31,6 +31,9 @@ springdoc:
 scraper:
   selenium:
     enabled: ${SELENIUM_ENABLED:true}  # 是否启用Selenium（资源受限时可设为false）
+  inventory:
+    estimator:
+      enabled: ${INVENTORY_ESTIMATOR_ENABLED:false}  # 999加购法库存估算（较慢，按需启用）
   proxy:
     enabled: true
     providers:

@@ -21,6 +21,7 @@
 /home/runner/work/AMZ_Project-Spyglass/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/config/ScraperProperties.java
 /home/runner/work/AMZ_Project-Spyglass/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/dto/AsinHistoryResponse.java
 /home/runner/work/AMZ_Project-Spyglass/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/SpyglassApplication.java
+/home/runner/work/AMZ_Project-Spyglass/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/scraper/InventoryEstimator.java
 /home/runner/work/AMZ_Project-Spyglass/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/model/BaseEntityModel.java
 /home/runner/work/AMZ_Project-Spyglass/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/scraper/ImageDownloader.java
 /home/runner/work/AMZ_Project-Spyglass/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/config/ProxyConfig.java

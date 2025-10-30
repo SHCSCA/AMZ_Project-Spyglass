@@ -170,7 +170,15 @@ docker compose up --build -d
 
 1.  **配置数据库:** 确保本地已安装并运行 `MySQL`。在 `spyglass-backend/src/main/resources/application.yml` 中，修改 `spring.datasource` 部分，使其指向你的本地数据库实例。
 2.  **配置环境变量:** 在你的 IDE 运行配置中或操作系统中设置必要的环境变量，如 `DINGTALK_WEBHOOK`、代理服务器地址等。
-3.  **运行后端:**
+3.  **安装 ChromeDriver（用于 Selenium 抓取）:**
+    - **自动安装（推荐）:** 项目已配置 WebDriverManager，首次运行时会自动下载匹配的 ChromeDriver。
+    - **手动安装:** 如需手动安装，请访问 [ChromeDriver 下载页](https://chromedriver.chromium.org/downloads) 下载与本地 Chrome 版本匹配的驱动：
+      - **检查 Chrome 版本:** 在浏览器地址栏输入 `chrome://version/`
+      - **下载对应版本 ChromeDriver**
+      - **放置到系统 PATH:** Linux/Mac 放到 `/usr/local/bin/`，Windows 放到任意 PATH 目录或项目根目录
+      - **验证安装:** 运行 `chromedriver --version`
+    - **Docker 环境:** Dockerfile 中已包含 Chrome 和 ChromeDriver 安装步骤。
+4.  **运行后端:**
     ```bash
     # 进入后端模块目录
     cd spyglass-backend
@@ -196,16 +204,18 @@ docker compose up --build -d
 
 | 环境变量 | 描述 | 示例值 |
 | :--- | :--- | :--- |
-| `POSTGRES_USER` | PostgreSQL 数据库用户名 | `spyglass` |
-| `POSTGRES_PASSWORD` | PostgreSQL 数据库密码 | `a-very-strong-password` |
-| `POSTGRES_DB` | PostgreSQL 数据库名称 | `spyglass_db` |
-| `SPRING_DATASOURCE_URL`| JDBC 连接字符串 (在 Docker Compose 中通常指向服务名) | `jdbc:postgresql://db:5432/spyglass_db` |
+| `SPRING_DATASOURCE_URL` | MySQL JDBC 连接字符串 | `jdbc:mysql://localhost:3306/spyglass_db?useSSL=false` |
+| `SPRING_DATASOURCE_USERNAME` | MySQL 数据库用户名 | `spyglass` |
+| `SPRING_DATASOURCE_PASSWORD` | MySQL 数据库密码 | `a-very-strong-password` |
 | `DINGTALK_WEBHOOK` | 钉钉机器人 Webhook 地址 | `https://oapi.dingtalk.com/robot/send?access_token=...` |
-| `PROXY_PROVIDER` | 代理服务商名称 (如 `BRIGHT_DATA`) | `BRIGHT_DATA` |
-| `PROXY_HOST` | 代理服务器主机名 | `brd.superproxy.io` |
-| `PROXY_PORT` | 代理服务器端口 | `22225` |
-| `PROXY_USERNAME` | 代理认证用户名 | `brd-customer-xxx-zone-residential` |
-| `PROXY_PASSWORD` | 代理认证密码 | `your-proxy-password` |
+| `DINGTALK_ENABLED` | 是否启用钉钉推送 | `true` / `false` |
+| `PROXY_URL` | 代理服务器地址 | `http://brd.superproxy.io:22225` |
+| `PROXY_USER` | 代理认证用户名 | `brd-customer-xxx-zone-residential` |
+| `PROXY_PASS` | 代理认证密码 | `your-proxy-password` |
+| `SELENIUM_ENABLED` | 是否启用 Selenium 动态抓取 | `true` / `false` (默认 `true`) |
+| `INVENTORY_ESTIMATOR_ENABLED` | 是否启用 999 加购法库存估算 | `true` / `false` (默认 `false`) |
+| `SCRAPER_DELAY` | 抓取任务间隔（毫秒） | `14400000` (4小时) |
+| `DOWNLOAD_IMAGE` | 是否下载图片计算真实 MD5 | `true` / `false` (默认 `false`) |
 
 > **提示:** 在使用 `docker-compose` 时，可以在项目根目录创建一个 `.env` 文件来存放这些变量，Docker Compose 会自动加载。
 
@@ -221,3 +231,26 @@ docker compose up --build -d
 
 -   **数据查询:**
     -   `GET /api/asin/{id}/history?range=30d`: 获取指定 ASIN 在特定时间范围内（如30天）的历史数据快照。
+
+-   **测试接口（开发调试）:**
+    -   `POST /api/test/scrape?url=<amazon-url>`: 手动触发抓取测试，返回完整快照和字段状态。
+    -   `POST /api/test/inventory?asin=<asin>&site=US`: 测试 999 加购法库存估算（需启用 `INVENTORY_ESTIMATOR_ENABLED=true`）。
+    -   `GET /api/test/health`: 健康检查，验证后端服务运行状态。
+
+### 6.6. 功能开关与配置建议
+
+-   **Selenium 抓取 (`SELENIUM_ENABLED`)**: 
+    -   **启用（默认）:** 当 Jsoup 静态抓取字段不完整时，自动使用 Selenium 补全。
+    -   **禁用:** 资源受限环境（低内存服务器）可禁用，仅使用 Jsoup 静态抓取。
+    
+-   **库存精确估算 (`INVENTORY_ESTIMATOR_ENABLED`)**:
+    -   **默认禁用:** 999 加购法需要完整的浏览器交互，执行较慢（30-60秒/次），建议仅在需要精确库存时手动启用。
+    -   **启用方式:** 设置环境变量 `INVENTORY_ESTIMATOR_ENABLED=true`，通过 `/api/test/inventory` 端点测试。
+    
+-   **钉钉推送 (`DINGTALK_ENABLED`)**:
+    -   **启用（默认）:** 价格/库存/标题/五点/A+/差评/主图变更时推送告警。
+    -   **禁用:** 开发测试环境可临时禁用，避免发送测试告警到生产群。
+
+-   **图片 MD5 计算 (`DOWNLOAD_IMAGE`)**:
+    -   **默认禁用:** 仅计算图片 URL 的 MD5（轻量但不精确）。
+    -   **启用:** 下载图片二进制并计算真实 MD5（精确但耗流量和时间）。

@@ -12,6 +12,7 @@ com/amz/spyglass/config/ScraperProperties.class
 com/amz/spyglass/controller/AsinHistoryController.class
 com/amz/spyglass/scraper/AsinSnapshot.class
 com/amz/spyglass/model/ScrapeTaskModel.class
+com/amz/spyglass/scraper/InventoryEstimator.class
 com/amz/spyglass/dto/AsinHistoryResponse.class
 com/amz/spyglass/model/AsinHistoryModel.class
 com/amz/spyglass/controller/AsinController.class
