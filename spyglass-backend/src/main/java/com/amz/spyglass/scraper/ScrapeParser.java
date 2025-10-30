@@ -9,6 +9,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,7 +57,17 @@ public class ScrapeParser {
         for (Element e : detailBullets) {
             String txt = e.text().toLowerCase(Locale.ROOT);
             if (txt.contains("best sellers rank") || txt.contains("best seller rank") || txt.contains("best sellers")) {
-                String rankCandidate = txt; // 直接从整行提取 #数字
+                // 优化数字提取逻辑，优先提取 # 开头的数字，并只取第一个
+                String rankCandidate = txt;
+                if (rankCandidate.contains("#")) {
+                    rankCandidate = rankCandidate.substring(rankCandidate.indexOf("#") + 1);
+                    // 去掉数字中的逗号，并只取数字部分
+                    Pattern pattern = Pattern.compile("^[0-9,]+");
+                    Matcher matcher = pattern.matcher(rankCandidate);
+                    if (matcher.find()) {
+                        rankCandidate = matcher.group(0);
+                    }
+                }
                 String digits = rankCandidate.replaceAll("[^0-9]", "");
                 try { if (!digits.isEmpty()) { bsr = Integer.parseInt(digits); break; } } catch (NumberFormatException ex) {}
             }

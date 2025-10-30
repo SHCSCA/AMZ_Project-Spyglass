@@ -1,0 +1,8 @@
+/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/test/java/com/amz/spyglass/scraper/ImageDownloaderTest.java
+/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/test/java/com/amz/spyglass/controller/AsinControllerTest.java
+/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/test/java/com/amz/spyglass/integration/ScraperFlowIntegrationTest.java
+/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/test/java/com/amz/spyglass/service/ScraperServiceMergeTest.java
+/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/test/java/com/amz/spyglass/controller/AsinHistoryControllerTest.java
+/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/test/java/com/amz/spyglass/scraper/ProxyManagerTest.java
+/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/test/java/com/amz/spyglass/scraper/ScrapeParserTest.java
+/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/test/java/com/amz/spyglass/alert/AlertServiceTest.java

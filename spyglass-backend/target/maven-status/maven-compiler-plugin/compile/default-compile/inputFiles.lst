@@ -1,6 +1,7 @@
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/scraper/ImageDownloader.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/dto/AsinRequest.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/repository/AsinHistoryRepository.java
+/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/controller/TestController.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/service/ScraperService.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/scraper/AsinSnapshotDTO.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/controller/HomeController.java
@@ -27,3 +28,4 @@
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/config/OpenApiConfig.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/scraper/AsinSnapshot.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/repository/ScrapeTaskRepository.java
+/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/scheduler/HtmlDumpCleaner.java
