@@ -9,6 +9,9 @@ import java.time.Instant;
  * 用于在爬虫层与业务层之间传递已解析的页面数据
  * 包含：标题、价格、BSR、库存、图片MD5、A+内容MD5等核心监控指标
  *
+ * 说明：这个 DTO 被爬虫（Jsoup/Selenium）返回，并由 ScraperService / ScraperScheduler 用来生成
+ * AsinHistoryModel 实体。
+ *
  * @author AI
  * @version 1.0.0
  * @since 2025-10-30
@@ -16,48 +19,30 @@ import java.time.Instant;
 @Data
 public class AsinSnapshotDTO {
 
-    /**
-     * 商品标题
-     */
+    // 商品标题
     private String title;
 
-    /**
-     * Buybox价格
-     */
+    // Buybox 价格
     private BigDecimal price;
 
-    /**
-     * Best Seller Rank排名
-     */
+    // BSR 排名
     private Integer bsr;
 
-    /**
-     * 预估库存数量
-     */
+    // 估算库存数量
     private Integer inventory;
 
-    /**
-     * 商品主图的MD5哈希值
-     */
+    // 主图 MD5
     private String imageMd5;
 
-    /**
-     * A+内容页面的MD5哈希值
-     */
+    // A+ 内容 MD5
     private String aplusMd5;
 
-    /**
-     * 总评论数
-     */
+    // 总评论数
     private Integer totalReviews;
 
-    /**
-     * 平均评分
-     */
+    // 平均评分
     private BigDecimal avgRating;
 
-    /**
-     * 抓取时间戳
-     */
+    // 抓取时间，默认为当前时刻
     private Instant snapshotAt = Instant.now();
 }

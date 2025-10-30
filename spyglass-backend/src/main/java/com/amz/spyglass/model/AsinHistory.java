@@ -18,9 +18,9 @@ import java.time.Instant;
 @Getter
 @Setter
 @NoArgsConstructor
-@Entity
-@Table(name = "asin_history")
-public class AsinHistoryModel extends BaseEntityModel {
+@Deprecated
+// 旧的历史快照实体，已迁移到 AsinHistoryModel.java。保留以便回溯。
+class AsinHistoryLegacy extends BaseEntityModel {
 
     /**
      * 主键ID
@@ -32,9 +32,10 @@ public class AsinHistoryModel extends BaseEntityModel {
     /**
      * 关联的 ASIN 实体
      */
+    // 旧关联引用，指向 AsinLegacy
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "asin_id", nullable = false)
-    private Asin asin;
+    private AsinLegacy asin;
 
     /**
      * 商品标题

@@ -15,9 +15,9 @@ import lombok.NoArgsConstructor;
 @Getter
 @Setter
 @NoArgsConstructor
-@Entity
-@Table(name = "asin")
-public class AsinModel extends BaseEntityModel {
+@Deprecated
+// 这个类是旧的命名遗留（已迁移为 AsinModel.java），保留以便回溯。不要用于新的代码中。
+class AsinLegacy extends BaseEntityModel {
 
     /**
      * 主键ID，自增长

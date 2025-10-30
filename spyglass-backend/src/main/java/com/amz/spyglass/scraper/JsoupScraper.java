@@ -1,7 +1,7 @@
 package com.amz.spyglass.scraper;
 
-import com.amz.spyglass.config.ProxyProperties;
 import com.amz.spyglass.config.ScraperProperties;
+import com.amz.spyglass.scraper.ProxyManager;
 import java.util.Optional;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
@@ -20,12 +20,11 @@ import java.time.Duration;
 @Component
 public class JsoupScraper implements Scraper {
 
-    private final ProxyProperties proxyProperties;
+    private final ProxyManager proxyManager;
     private final ScraperProperties scraperProperties;
     private final com.amz.spyglass.scraper.ImageDownloader imageDownloader;
-
-    public JsoupScraper(ProxyProperties proxyProperties, ScraperProperties scraperProperties, com.amz.spyglass.scraper.ImageDownloader imageDownloader) {
-        this.proxyProperties = proxyProperties;
+    public JsoupScraper(ProxyManager proxyManager, ScraperProperties scraperProperties, com.amz.spyglass.scraper.ImageDownloader imageDownloader) {
+        this.proxyManager = proxyManager;
         this.scraperProperties = scraperProperties;
         this.imageDownloader = imageDownloader;
     }
@@ -37,20 +36,29 @@ public class JsoupScraper implements Scraper {
                 .timeout((int) Duration.ofSeconds(20).toMillis())
                 .followRedirects(true);
 
-        // 如果配置了代理，则设置代理
-        if (proxyProperties != null && proxyProperties.isEnabled() && proxyProperties.getHost() != null && proxyProperties.getPort() != null) {
-            conn.proxy(proxyProperties.getHost(), proxyProperties.getPort());
-
-            // 简单处理代理鉴权：通过 JVM 全局 Authenticator 提供用户名/密码
-            if (proxyProperties.getUsername() != null && proxyProperties.getPassword() != null) {
-                Authenticator.setDefault(new Authenticator() {
-                    @Override
-                    protected PasswordAuthentication getPasswordAuthentication() {
-                        return new PasswordAuthentication(proxyProperties.getUsername(), proxyProperties.getPassword().toCharArray());
+        // 如果配置了代理，则从 ProxyManager 获取下一个代理并应用到请求（线程安全的请求级代理认证）
+        try {
+            com.amz.spyglass.config.ProxyConfig.ProxyProvider provider = proxyManager.nextProxy();
+            if (provider != null) {
+                // 解析 host:port
+                String proxyUrl = provider.getUrl();
+                if (proxyUrl != null && !proxyUrl.isEmpty()) {
+                    String[] parts = proxyUrl.split(":");
+                    if (parts.length >= 3) {
+                        String host = parts[1].replace("//", "");
+                        int port = Integer.parseInt(parts[2]);
+                        conn.proxy(host, port);
                     }
-                });
+                }
+
+                // 如果有认证，添加请求级 Proxy-Authorization 头（Base64）
+                if (provider.getUsername() != null && provider.getPassword() != null) {
+                    String auth = provider.getUsername() + ":" + provider.getPassword();
+                    String encoded = java.util.Base64.getEncoder().encodeToString(auth.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    conn.header("Proxy-Authorization", "Basic " + encoded);
+                }
             }
-        }
+        } catch (Exception ignored) {}
 
         Document doc = conn.get();
         return doc.title();
@@ -63,17 +71,26 @@ public class JsoupScraper implements Scraper {
                 .timeout((int) Duration.ofSeconds(20).toMillis())
                 .followRedirects(true);
 
-        if (proxyProperties != null && proxyProperties.isEnabled() && proxyProperties.getHost() != null && proxyProperties.getPort() != null) {
-            conn.proxy(proxyProperties.getHost(), proxyProperties.getPort());
-            if (proxyProperties.getUsername() != null && proxyProperties.getPassword() != null) {
-                Authenticator.setDefault(new Authenticator() {
-                    @Override
-                    protected PasswordAuthentication getPasswordAuthentication() {
-                        return new PasswordAuthentication(proxyProperties.getUsername(), proxyProperties.getPassword().toCharArray());
+        // 使用 ProxyManager 获取请求级代理并应用（不使用 JVM 全局 Authenticator）
+        try {
+            com.amz.spyglass.config.ProxyConfig.ProxyProvider provider = proxyManager.nextProxy();
+            if (provider != null) {
+                String proxyUrl = provider.getUrl();
+                if (proxyUrl != null && !proxyUrl.isEmpty()) {
+                    String[] parts = proxyUrl.split(":" );
+                    if (parts.length >= 3) {
+                        String host = parts[1].replace("//", "");
+                        int port = Integer.parseInt(parts[2]);
+                        conn.proxy(host, port);
                     }
-                });
+                }
+                if (provider.getUsername() != null && provider.getPassword() != null) {
+                    String auth = provider.getUsername() + ":" + provider.getPassword();
+                    String encoded = java.util.Base64.getEncoder().encodeToString(auth.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    conn.header("Proxy-Authorization", "Basic " + encoded);
+                }
             }
-        }
+        } catch (Exception ignored) {}
 
         Document doc = conn.get();
             AsinSnapshotDTO s = ScrapeParser.parse(doc);
