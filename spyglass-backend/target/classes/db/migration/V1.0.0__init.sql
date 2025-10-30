@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS asin_history (
     price DECIMAL(14,2) COMMENT '当前价格',
     bsr INT COMMENT 'Best Seller Rank排名',
     inventory INT COMMENT '预估库存数量',
+    bullet_points TEXT COMMENT '商品五点要点（feature bullets），多行文本，按抓取顺序换行存储',
     image_md5 VARCHAR(64) COMMENT '主图MD5哈希值',
     aplus_md5 VARCHAR(64) COMMENT 'A+页面内容MD5哈希值',
     total_reviews INT COMMENT '总评论数',

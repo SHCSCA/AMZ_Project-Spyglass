@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 告警服务：对比新旧快照并触发告警（包括钉钉推送和价格记录入库）
@@ -54,6 +55,37 @@ public class AlertService {
         Integer threshold = asin.getInventoryThreshold();
         if (inv != null && threshold != null && inv < threshold) {
             dingTalkPusher.pushText("库存告警: " + asin.getAsin(), "当前库存: " + inv + " 小于阈值: " + threshold);
+        }
+
+        // 以下为字段级别变更告警：标题、五点要点、A+、主图
+        if (last != null) {
+            // title
+            String oldTitle = last.getTitle();
+            String newTitle = newSnap.getTitle();
+            if (!Objects.equals(oldTitle, newTitle)) {
+                dingTalkPusher.pushText("标题变更告警: " + asin.getAsin(), "旧标题: " + (oldTitle == null ? "" : oldTitle) + "\n新标题: " + (newTitle == null ? "" : newTitle));
+            }
+
+            // bullet points
+            String oldBullets = last.getBulletPoints();
+            String newBullets = newSnap.getBulletPoints();
+            if (!Objects.equals(oldBullets, newBullets)) {
+                dingTalkPusher.pushText("五点要点变更: " + asin.getAsin(), "旧五点:\n" + (oldBullets == null ? "" : oldBullets) + "\n新五点:\n" + (newBullets == null ? "" : newBullets));
+            }
+
+            // A+ 区域 MD5
+            String oldAplus = last.getAplusMd5();
+            String newAplus = newSnap.getAplusMd5();
+            if (!Objects.equals(oldAplus, newAplus)) {
+                dingTalkPusher.pushText("A+ 内容变更: " + asin.getAsin(), "旧 A+ MD5: " + (oldAplus == null ? "" : oldAplus) + "\n新 A+ MD5: " + (newAplus == null ? "" : newAplus));
+            }
+
+            // 主图 MD5
+            String oldImg = last.getImageMd5();
+            String newImg = newSnap.getImageMd5();
+            if (!Objects.equals(oldImg, newImg)) {
+                dingTalkPusher.pushText("主图变更: " + asin.getAsin(), "旧主图MD5: " + (oldImg == null ? "" : oldImg) + "\n新主图MD5: " + (newImg == null ? "" : newImg));
+            }
         }
     }
 }

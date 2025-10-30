@@ -87,6 +87,22 @@ public class ScrapeParser {
         }
     s.setImageMd5(imgUrl == null ? null : md5Hex(imgUrl));
 
+        // feature bullets（五点要点）: 优先选择常见的 #feature-bullets 列表
+        try {
+            Elements bullets = doc.select("#feature-bullets .a-list-item, #feature-bullets li");
+            StringBuilder sb = new StringBuilder();
+            for (Element b : bullets) {
+                String text = b.text().trim();
+                if (text.isEmpty()) continue;
+                if (sb.length() > 0) sb.append('\n');
+                sb.append(text);
+            }
+            String bulletsText = sb.length() == 0 ? null : sb.toString();
+            s.setBulletPoints(bulletsText);
+        } catch (Exception ignored) {
+            s.setBulletPoints(null);
+        }
+
         // A+ 内容 MD5：尝试根据 aplus 区域获取 HTML 并计算 MD5（同样仅基于 HTML 字符串）
         Element aplus = doc.selectFirst("#aplus, .aplus, .a-plus");
         String aplusHtml = aplus == null ? null : aplus.html();

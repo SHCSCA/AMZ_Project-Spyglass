@@ -1,7 +1,7 @@
 package com.amz.spyglass.controller;
 
-import com.amz.spyglass.model.Asin;
-import com.amz.spyglass.model.AsinHistory;
+import com.amz.spyglass.model.AsinModel;
+import com.amz.spyglass.model.AsinHistoryModel;
 import com.amz.spyglass.repository.AsinHistoryRepository;
 import com.amz.spyglass.repository.AsinRepository;
 import org.junit.jupiter.api.Test;
@@ -32,7 +32,7 @@ public class AsinHistoryControllerTest {
 
     @Test
     public void getHistory_returnsSavedSnapshot() throws Exception {
-        Asin a = new Asin();
+        AsinModel a = new AsinModel();
         a.setAsin("TESTASIN123");
         a.setSite("US");
         a.setNickname("t1");
@@ -40,7 +40,7 @@ public class AsinHistoryControllerTest {
         a.setUpdatedAt(Instant.now());
         a = asinRepository.save(a);
 
-        AsinHistory h = new AsinHistory();
+        AsinHistoryModel h = new AsinHistoryModel();
         h.setAsin(a);
         h.setTitle("sample title");
         h.setSnapshotAt(Instant.now());

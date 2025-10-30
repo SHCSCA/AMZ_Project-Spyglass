@@ -1,7 +1,8 @@
 package com.amz.spyglass.scraper;
 
-import com.amz.spyglass.config.ProxyProperties;
 import com.amz.spyglass.config.ScraperProperties;
+import com.amz.spyglass.scraper.ProxyManager;
+import com.amz.spyglass.config.ProxyConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -28,11 +29,11 @@ import java.util.Optional;
 public class ImageDownloader {
 
     private final Logger logger = LoggerFactory.getLogger(ImageDownloader.class);
-    private final ProxyProperties proxyProperties;
+    private final ProxyManager proxyManager;
     private final ScraperProperties scraperProperties;
 
-    public ImageDownloader(ProxyProperties proxyProperties, ScraperProperties scraperProperties) {
-        this.proxyProperties = proxyProperties;
+    public ImageDownloader(ProxyManager proxyManager, ScraperProperties scraperProperties) {
+        this.proxyManager = proxyManager;
         this.scraperProperties = scraperProperties;
     }
 
@@ -49,20 +50,31 @@ public class ImageDownloader {
             HttpClient.Builder clientBuilder = HttpClient.newBuilder()
                     .connectTimeout(Duration.ofMillis(scraperProperties.getImageDownloadTimeoutMs()));
 
-            // 配置代理（如有）
-            if (proxyProperties != null && proxyProperties.isEnabled() && proxyProperties.getHost() != null && proxyProperties.getPort() != null) {
-                InetSocketAddress addr = new InetSocketAddress(proxyProperties.getHost(), proxyProperties.getPort());
-                clientBuilder.proxy(ProxySelector.of(addr));
-
-                if (proxyProperties.getUsername() != null && proxyProperties.getPassword() != null) {
-                    clientBuilder.authenticator(new Authenticator() {
-                        @Override
-                        protected PasswordAuthentication getPasswordAuthentication() {
-                            return new PasswordAuthentication(proxyProperties.getUsername(), proxyProperties.getPassword().toCharArray());
+            // 使用 ProxyManager 获取请求级代理（如有）并配置到 HttpClient
+            try {
+                ProxyConfig.ProxyProvider provider = proxyManager.nextProxy();
+                if (provider != null) {
+                    String proxyUrl = provider.getUrl();
+                    if (proxyUrl != null && !proxyUrl.isEmpty()) {
+                        String[] parts = proxyUrl.split(":" );
+                        if (parts.length >= 3) {
+                            String host = parts[1].replace("//", "");
+                            int port = Integer.parseInt(parts[2]);
+                            InetSocketAddress addr = new InetSocketAddress(host, port);
+                            clientBuilder.proxy(ProxySelector.of(addr));
                         }
-                    });
+                    }
+
+                    if (provider.getUsername() != null && provider.getPassword() != null) {
+                        clientBuilder.authenticator(new java.net.Authenticator() {
+                            @Override
+                            protected PasswordAuthentication getPasswordAuthentication() {
+                                return new PasswordAuthentication(provider.getUsername(), provider.getPassword().toCharArray());
+                            }
+                        });
+                    }
                 }
-            }
+            } catch (Exception ignored) {}
 
             HttpClient client = clientBuilder.build();
             HttpRequest req = HttpRequest.newBuilder()

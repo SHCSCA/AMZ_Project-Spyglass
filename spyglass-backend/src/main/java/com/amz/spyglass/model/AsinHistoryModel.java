@@ -71,6 +71,13 @@ public class AsinHistoryModel extends BaseEntityModel {
     private String aplusMd5;
 
     /**
+     * 商品五点要点（feature bullets），以多行文本存储，每个要点一行。
+     * 注意：为避免复杂的 JSON/结构化存储，这里使用 TEXT 字段；如果需要更复杂的查询可改为 JSON 字段。
+     */
+    @Column(columnDefinition = "TEXT")
+    private String bulletPoints;
+
+    /**
      * 总评论数
      */
     private Integer totalReviews;

@@ -45,4 +45,7 @@ public class AsinSnapshotDTO {
 
     // 抓取时间，默认为当前时刻
     private Instant snapshotAt = Instant.now();
+
+    // 商品五点要点（feature bullets），合并为多行文本，每个要点一行
+    private String bulletPoints;
 }
