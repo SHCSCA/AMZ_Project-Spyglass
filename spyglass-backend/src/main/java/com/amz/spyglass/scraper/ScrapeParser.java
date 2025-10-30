@@ -138,10 +138,14 @@ public class ScrapeParser {
                     if (!digit.isEmpty()) {
                         int rating = Integer.parseInt(digit.substring(0, Math.min(digit.length(), 1)));
                         if (rating >=1 && rating <=3) {
-                            // 找到差评，记录文本到 aplusMd5 临时字段（或可以扩展表）
+                            // 找到差评，计算其 MD5（基于评论内容+时间）
                             org.jsoup.nodes.Element content = re.selectFirst(".review-text, .a-size-base.review-text");
-                            if (content != null) {
-                                s.setAplusMd5(md5Hex(content.text()));
+                            org.jsoup.nodes.Element dateEl = re.selectFirst(".review-date");
+                            if (content != null && dateEl != null) {
+                                // 组合评论内容和时间计算 MD5，避免因相同内容产生误报
+                                String reviewText = content.text();
+                                String reviewDate = dateEl.text();
+                                s.setLatestNegativeReviewMd5(md5Hex(reviewText + "|" + reviewDate));
                                 break;
                             }
                         }

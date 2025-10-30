@@ -71,6 +71,12 @@ public class AsinHistoryModel extends BaseEntityModel {
     private String aplusMd5;
 
     /**
+     * 最新差评的 MD5 哈希值（基于评论内容+时间计算，用于检测新差评）
+     */
+    @Column(length = 64)
+    private String latestNegativeReviewMd5;
+
+    /**
      * 商品五点要点（feature bullets），以多行文本存储，每个要点一行。
      * 注意：为避免复杂的 JSON/结构化存储，这里使用 TEXT 字段；如果需要更复杂的查询可改为 JSON 字段。
      */

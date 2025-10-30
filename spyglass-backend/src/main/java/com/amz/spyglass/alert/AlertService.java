@@ -80,6 +80,13 @@ public class AlertService {
                 dingTalkPusher.pushText("A+ 内容变更: " + asin.getAsin(), "旧 A+ MD5: " + (oldAplus == null ? "" : oldAplus) + "\n新 A+ MD5: " + (newAplus == null ? "" : newAplus));
             }
 
+            // 新差评检测（比较新旧差评的 MD5）
+            String oldReviewMd5 = last.getLatestNegativeReviewMd5();
+            String newReviewMd5 = newSnap.getLatestNegativeReviewMd5();
+            if (!Objects.equals(oldReviewMd5, newReviewMd5) && newReviewMd5 != null) {
+                dingTalkPusher.pushText("新差评告警: " + asin.getAsin(), "检测到新的差评，需要及时关注。");
+            }
+
             // 主图 MD5
             String oldImg = last.getImageMd5();
             String newImg = newSnap.getImageMd5();
