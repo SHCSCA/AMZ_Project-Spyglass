@@ -2,7 +2,7 @@ package com.amz.spyglass.controller;
 
 import com.amz.spyglass.dto.AsinRequest;
 import com.amz.spyglass.dto.AsinResponse;
-import com.amz.spyglass.model.Asin;
+import com.amz.spyglass.model.AsinModel;
 import com.amz.spyglass.repository.AsinRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -44,14 +44,14 @@ public class AsinController {
      */
     @PostMapping
     public ResponseEntity<AsinResponse> create(@Valid @RequestBody AsinRequest req) {
-        Asin a = new Asin();
+    AsinModel a = new AsinModel();
         a.setAsin(req.getAsin());
         a.setSite(req.getSite());
         a.setNickname(req.getNickname());
         a.setInventoryThreshold(req.getInventoryThreshold());
         a.setCreatedAt(Instant.now());
         a.setUpdatedAt(Instant.now());
-        Asin saved = asinRepository.save(a);
+        AsinModel saved = asinRepository.save(a);
         return ResponseEntity.ok(toResponse(saved));
     }
 
@@ -74,12 +74,12 @@ public class AsinController {
             a.setNickname(req.getNickname());
             a.setSite(req.getSite());
             a.setUpdatedAt(Instant.now());
-            Asin saved = asinRepository.save(a);
+            AsinModel saved = asinRepository.save(a);
             return ResponseEntity.ok(toResponse(saved));
         }).orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    private AsinResponse toResponse(Asin a) {
+    private AsinResponse toResponse(AsinModel a) {
         AsinResponse r = new AsinResponse();
         r.setId(a.getId());
         r.setAsin(a.getAsin());

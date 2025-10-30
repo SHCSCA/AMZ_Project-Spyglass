@@ -18,7 +18,7 @@ import java.time.Instant;
 @Getter
 @Setter
 @MappedSuperclass
-public abstract class BaseEntity {
+public abstract class BaseEntityModel {
 
     /**
      * 记录创建时间

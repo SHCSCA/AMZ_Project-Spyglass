@@ -20,8 +20,8 @@ public class ScrapeParser {
     /**
      * 解析 Document 并返回填充的 AsinSnapshot（不包含 snapshotAt，调用方可设置）
      */
-    public static AsinSnapshot parse(Document doc) {
-        AsinSnapshot s = new AsinSnapshot();
+    public static AsinSnapshotDTO parse(Document doc) {
+        AsinSnapshotDTO s = new AsinSnapshotDTO();
         if (doc == null) return s;
 
         // title

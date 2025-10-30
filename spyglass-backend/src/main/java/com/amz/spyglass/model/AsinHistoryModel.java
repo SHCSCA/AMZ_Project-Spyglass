@@ -20,7 +20,7 @@ import java.time.Instant;
 @NoArgsConstructor
 @Entity
 @Table(name = "asin_history")
-public class AsinHistory extends BaseEntity {
+public class AsinHistoryModel extends BaseEntityModel {
 
     /**
      * 主键ID
@@ -34,7 +34,7 @@ public class AsinHistory extends BaseEntity {
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "asin_id", nullable = false)
-    private Asin asin;
+    private AsinModel asin;
 
     /**
      * 商品标题

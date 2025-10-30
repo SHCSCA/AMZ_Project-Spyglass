@@ -27,7 +27,7 @@ public class ScraperService {
     /**
      * 抓取并返回完整的 Asin 快照（委托给底层 Scraper）
      */
-    public com.amz.spyglass.scraper.AsinSnapshot fetchSnapshot(String url) throws Exception {
+    public com.amz.spyglass.scraper.AsinSnapshotDTO fetchSnapshot(String url) throws Exception {
         return scraper.fetchSnapshot(url);
     }
 }

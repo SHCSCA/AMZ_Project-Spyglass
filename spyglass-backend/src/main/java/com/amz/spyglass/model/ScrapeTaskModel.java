@@ -19,7 +19,7 @@ import java.time.Instant;
 @NoArgsConstructor
 @Entity
 @Table(name = "scrape_task")
-public class ScrapeTask extends BaseEntity {
+public class ScrapeTaskModel extends BaseEntityModel {
 
     /**
      * 任务状态枚举

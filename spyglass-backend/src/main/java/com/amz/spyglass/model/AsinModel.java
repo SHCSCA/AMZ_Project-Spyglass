@@ -17,7 +17,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @Entity
 @Table(name = "asin")
-public class Asin extends BaseEntity {
+public class AsinModel extends BaseEntityModel {
 
     /**
      * 主键ID，自增长

@@ -57,7 +57,7 @@ public class JsoupScraper implements Scraper {
     }
 
     @Override
-    public AsinSnapshot fetchSnapshot(String url) throws Exception {
+    public AsinSnapshotDTO fetchSnapshot(String url) throws Exception {
         Connection conn = Jsoup.connect(url)
                 .userAgent("Mozilla/5.0 (compatible; SpyglassBot/1.0)")
                 .timeout((int) Duration.ofSeconds(20).toMillis())
@@ -76,7 +76,7 @@ public class JsoupScraper implements Scraper {
         }
 
         Document doc = conn.get();
-        AsinSnapshot s = ScrapeParser.parse(doc);
+            AsinSnapshotDTO s = ScrapeParser.parse(doc);
         s.setSnapshotAt(java.time.Instant.now());
 
         // 如果启用了二进制图片下载，则尝试下载图片并计算真实 MD5，失败时回退到 URL 的 MD5（由解析器已计算）
