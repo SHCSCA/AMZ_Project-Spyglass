@@ -10,6 +10,7 @@
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/scheduler/ScraperScheduler.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/config/ProxyProperties.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/controller/AsinController.java
+/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/model/BaseEntity.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/dto/AsinHistoryResponse.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/controller/AsinHistoryController.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/dto/AsinResponse.java

@@ -1,57 +1,50 @@
 package com.amz.spyglass.model;
 
 import jakarta.persistence.*;
-import java.time.Instant;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.NoArgsConstructor;
 
 /**
- * 实体：Asin（中文注释）
- * 描述：表示系统中需要监控的单个 ASIN 条目。
- * 关键字段：asin（ASIN 字符串），site（站点，如 US/UK），inventoryThreshold（库存告警阈值）
+ * Asin 实体类：表示需要监控的亚马逊商品
+ *
+ * @author AI
+ * @version 1.0.0
+ * @since 2025-10-29
  */
+@Getter
+@Setter
+@NoArgsConstructor
 @Entity
-@Table(name = "asins")
-public class Asin {
+@Table(name = "asin")
+public class Asin extends BaseEntity {
 
-    /** 主键，自增 */
+    /**
+     * 主键ID，自增长
+     */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** 商品 ASIN，唯一且不能为空 */
-    @Column(nullable = false, unique = true)
+    /**
+     * Amazon 标准识别号，不可为空
+     */
+    @Column(nullable = false)
     private String asin;
 
-    /** 所属站点，例如 US、UK 等 */
+    /**
+     * 站点代码，如 US、UK，不可为空
+     */
     @Column(nullable = false)
     private String site;
 
-    /** 用户自定义昵称，便于在 UI 展示 */
+    /**
+     * 自定义昵称，用于在UI中显示
+     */
     private String nickname;
 
-    /** 库存报警阈值，低于该值则触发警报 */
+    /**
+     * 库存预警阈值，低于此值触发告警
+     */
     private Integer inventoryThreshold;
-
-    /** 记录创建时间 */
-    private Instant createdAt = Instant.now();
-
-    /** 记录更新时间 */
-    private Instant updatedAt = Instant.now();
-
-    public Asin() {}
-
-    // getters and setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-    public String getAsin() { return asin; }
-    public void setAsin(String asin) { this.asin = asin; }
-    public String getSite() { return site; }
-    public void setSite(String site) { this.site = site; }
-    public String getNickname() { return nickname; }
-    public void setNickname(String nickname) { this.nickname = nickname; }
-    public Integer getInventoryThreshold() { return inventoryThreshold; }
-    public void setInventoryThreshold(Integer inventoryThreshold) { this.inventoryThreshold = inventoryThreshold; }
-    public Instant getCreatedAt() { return createdAt; }
-    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
-    public Instant getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
 }

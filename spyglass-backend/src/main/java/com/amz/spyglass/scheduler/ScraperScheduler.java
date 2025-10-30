@@ -43,7 +43,7 @@ public class ScraperScheduler {
     public void runForAsinAsync(Long asinId) {
         ScrapeTask task = new ScrapeTask();
         task.setAsinId(asinId);
-        task.setStatus("RUNNING");
+        task.setStatus(ScrapeTask.TaskStatus.RUNNING);
         task.setRunAt(Instant.now());
         scrapeTaskRepository.save(task);
 
@@ -53,7 +53,7 @@ public class ScraperScheduler {
             // 调用 ScraperService 获取完整的页面快照（包含 price/bsr/inventory/imageMd5/aplusMd5）
             com.amz.spyglass.scraper.AsinSnapshot snap = scraperService.fetchSnapshot("https://www.amazon.com/dp/" + a.getAsin());
 
-            task.setStatus("SUCCESS");
+            task.setStatus(ScrapeTask.TaskStatus.SUCCESS);
             task.setMessage("title=" + (snap.getTitle() == null ? "" : snap.getTitle()));
             task.setRunAt(Instant.now());
             scrapeTaskRepository.save(task);
@@ -75,7 +75,7 @@ public class ScraperScheduler {
             }
         } catch (Exception ex) {
             logger.error("scrape failed for asin {}", asinId, ex);
-            task.setStatus("FAILED");
+            task.setStatus(ScrapeTask.TaskStatus.FAILED);
             task.setMessage(ex.getMessage());
             task.setRunAt(Instant.now());
             scrapeTaskRepository.save(task);

@@ -161,6 +161,173 @@
 
 ## 使用指南（详细步骤）
 
+下面给出在本地开发、测试和生产部署的详细步骤，包含数据库初始化、配置说明和代理设置等关键点。
+
+### 环境要求
+1. Java 17+
+2. Maven 3.8+
+3. Docker & Docker Compose (用于生产/集成部署)
+4. MySQL 8.0+ (本地开发可选)
+5. 可选：有外网访问或代理配置用于抓取真实页面
+
+### 本地开发（快速启动）
+1. 克隆仓库并切换到开发分支：
+```bash
+git clone https://github.com/SHCSCA/AMZ_Project-Spyglass.git
+cd AMZ_Project-Spyglass
+git checkout dev
+```
+
+2. 配置 MySQL 数据库：
+```bash
+# 使用 Docker 启动 MySQL（如果没有本地 MySQL）
+docker run --name spyglass-mysql \
+  -e MYSQL_USER=spyglass \
+  -e MYSQL_PASSWORD=your_password \
+  -e MYSQL_DATABASE=amzspaglass \
+  -e MYSQL_ROOT_PASSWORD=root_password \
+  -p 3306:3306 \
+  -d mysql:8.0
+```
+
+3. 配置应用程序（创建 `application-local.yml`）：
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/amzspaglass?useSSL=false&serverTimezone=UTC
+    username: spyglass
+    password: your_password
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+
+proxy:
+  enabled: false  # 本地开发时可以禁用代理
+  host: your.proxy.host  # 生产环境必须配置
+  port: 12345
+  username: proxy-user  # 可选
+  password: proxy-pass  # 可选
+
+scraper:
+  downloadImageBinary: false  # 开发环境建议关闭
+  imageDownloadTimeoutMs: 5000
+  scheduleEnabled: true  # 是否启用自动调度
+  intervalMinutes: 240  # 每4小时执行一次
+
+dingtalk:
+  webhook: https://oapi.dingtalk.com/robot/send?access_token=your_token
+  secret: your_secret  # 钉钉加签密钥
+```
+
+4. 构建并运行单元测试：
+```bash
+mvn -f spyglass-backend/pom.xml clean test
+```
+
+5. 运行应用程序（开发模式）：
+```bash
+mvn -f spyglass-backend/pom.xml spring-boot:run -Dspring.profiles.active=local
+```
+
+6. 验证服务是否正常运行：
+   - Swagger UI: http://localhost:8080/swagger-ui.html
+   - OpenAPI JSON: http://localhost:8080/v3/api-docs
+   - H2 控制台: http://localhost:8080/h2-console (仅当使用 H2 内存数据库时)
+
+### 生产部署（Docker Compose）
+1. 创建环境变量文件 `.env`：
+```plaintext
+MYSQL_HOST=your_mysql_host
+MYSQL_PORT=3306
+MYSQL_DATABASE=amzspaglass
+MYSQL_USER=spyglass
+MYSQL_PASSWORD=your_secure_password
+PROXY_HOST=your.proxy.host
+PROXY_PORT=12345
+PROXY_USERNAME=proxy-user
+PROXY_PASSWORD=proxy-pass
+DINGTALK_WEBHOOK=your_webhook_url
+DINGTALK_SECRET=your_secret
+```
+
+2. 启动所有服务：
+```bash
+docker compose up -d
+```
+
+3. 检查服务状态和日志：
+```bash
+# 查看所有容器状态
+docker compose ps
+
+# 查看应用日志
+docker compose logs -f backend
+
+# 查看MySQL日志
+docker compose logs -f mysql
+```
+
+### 常见故障排除
+1. 数据库连接问题：
+   - 检查 MySQL 服务是否运行：`docker compose ps`
+   - 验证连接信息：`mysql -h localhost -u spyglass -p`
+   - 检查防火墙设置：确保端口 3306 开放
+
+2. 代理配置问题：
+   - 测试代理连接：`curl -x proxy:port http://example.com`
+   - 确认代理凭证正确性
+   - 检查 application.yml 中的代理配置
+
+3. 爬虫相关问题：
+   - 检查日志中的 HTTP 状态码
+   - 验证代理 IP 轮转是否正常
+   - 确认目标网站是否有反爬虫措施
+
+### API 使用示例
+1. 添加新的监控 ASIN：
+```bash
+curl -X POST http://localhost:8080/api/asin \
+  -H "Content-Type: application/json" \
+  -d '{"asin":"B0123456789","site":"US","nickname":"示例商品","inventoryThreshold":100}'
+```
+
+2. 手动触发抓取：
+```bash
+curl -X POST http://localhost:8080/api/scraper/trigger/B0123456789
+```
+
+3. 查询历史数据：
+```bash
+curl http://localhost:8080/api/data/asin/B0123456789/history?range=30d
+```
+
+### 开发指南与约定
+1. 代码提交规范：
+   - 遵循 Angular commit message 格式
+   - 每个功能变更创建独立分支
+   - 提交前运行单元测试
+
+2. 数据库变更：
+   - 所有 DDL 通过 Flyway migration
+   - 表名使用小写下划线命名
+   - 必须包含 created_at/updated_at 审计字段
+   - 所有表和字段添加中文注释
+
+3. API 开发规范：
+   - 遵循 RESTful 设计原则
+   - 使用 DTO 对象封装请求/响应
+   - 添加 OpenAPI 注解文档
+   - 实现统一的异常处理
+
+4. 爬虫开发注意事项：
+   - 必须支持代理配置
+   - 实现请求重试机制
+   - 使用 MDC 记录跟踪日志
+   - 注意规避反爬虫检测（详细步骤）
+
 下面给出在本地开发、测试和生产部署的详细步骤，包含数据库初始化、配置说明和如何启用图片二进制 MD5 计算。
 
 ### 环境要求

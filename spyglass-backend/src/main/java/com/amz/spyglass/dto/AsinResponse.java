@@ -1,32 +1,51 @@
 package com.amz.spyglass.dto;
 
 import java.time.Instant;
+import lombok.Data;
 
 /**
- * DTO：AsinResponse（中文注释）
- * 用途：返回给前端的 ASIN 对象视图，包含创建/更新时间与基础配置字段。
+ * ASIN 响应 DTO
+ * 用于返回给前端的 ASIN 对象视图，包含基础配置字段和审计时间戳
+ *
+ * @author AI
+ * @version 1.0.0
+ * @since 2025-10-29
  */
+@Data
 public class AsinResponse {
-    private Long id;
-    private String asin;
-    private String site;
-    private String nickname;
-    private Integer inventoryThreshold;
-    private Instant createdAt;
-    private Instant updatedAt;
 
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-    public String getAsin() { return asin; }
-    public void setAsin(String asin) { this.asin = asin; }
-    public String getSite() { return site; }
-    public void setSite(String site) { this.site = site; }
-    public String getNickname() { return nickname; }
-    public void setNickname(String nickname) { this.nickname = nickname; }
-    public Integer getInventoryThreshold() { return inventoryThreshold; }
-    public void setInventoryThreshold(Integer inventoryThreshold) { this.inventoryThreshold = inventoryThreshold; }
-    public Instant getCreatedAt() { return createdAt; }
-    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
-    public Instant getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+    /**
+     * ASIN记录ID
+     */
+    private Long id;
+
+    /**
+     * Amazon 标准识别号
+     */
+    private String asin;
+
+    /**
+     * 站点代码，如 US、UK
+     */
+    private String site;
+
+    /**
+     * 自定义昵称，用于UI展示
+     */
+    private String nickname;
+
+    /**
+     * 库存预警阈值
+     */
+    private Integer inventoryThreshold;
+
+    /**
+     * 记录创建时间
+     */
+    private Instant createdAt;
+
+    /**
+     * 记录最后更新时间
+     */
+    private Instant updatedAt;
 }

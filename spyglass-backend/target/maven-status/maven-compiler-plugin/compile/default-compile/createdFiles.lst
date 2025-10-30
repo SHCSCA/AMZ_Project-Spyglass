@@ -17,12 +17,14 @@ com/amz/spyglass/dto/AsinHistoryResponse.class
 com/amz/spyglass/scraper/JsoupScraper$1.class
 com/amz/spyglass/controller/AsinController.class
 com/amz/spyglass/scheduler/ScraperScheduler.class
+com/amz/spyglass/model/BaseEntity.class
 com/amz/spyglass/scraper/ProxyManager.class
 com/amz/spyglass/config/OpenApiConfig.class
 com/amz/spyglass/service/ScraperService.class
 com/amz/spyglass/repository/AsinRepository.class
 com/amz/spyglass/config/ProxyConfig$ProxyProvider.class
 com/amz/spyglass/config/ProxyConfig.class
+com/amz/spyglass/model/ScrapeTask$TaskStatus.class
 com/amz/spyglass/dto/AsinRequest.class
 com/amz/spyglass/SpyglassApplication.class
 com/amz/spyglass/scraper/ImageDownloader.class
