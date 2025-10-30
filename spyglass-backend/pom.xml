@@ -101,6 +101,12 @@
             <scope>test</scope>
         </dependency>
         <!-- Selenium omitted from runtime skeleton; add when needed -->
+        <dependency>
+            <!-- Selenium：用于处理需要 JS 渲染的页面（如库存抓取） -->
+            <groupId>org.seleniumhq.selenium</groupId>
+            <artifactId>selenium-java</artifactId>
+            <version>4.11.0</version>
+        </dependency>
     </dependencies>
 
     <build>

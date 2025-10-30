@@ -17,9 +17,9 @@ import java.time.Instant;
 @Getter
 @Setter
 @NoArgsConstructor
-@Entity
-@Table(name = "scrape_task")
-public class ScrapeTaskModel extends BaseEntityModel {
+@Deprecated
+// 旧的抓取任务实体，已迁移为 ScrapeTaskModel.java（新文件）。
+class ScrapeTaskLegacy extends BaseEntityModel {
 
     /**
      * 任务状态枚举

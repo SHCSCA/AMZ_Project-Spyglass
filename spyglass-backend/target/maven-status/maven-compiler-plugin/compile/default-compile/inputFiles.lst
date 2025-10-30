@@ -1,4 +1,6 @@
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/scraper/ImageDownloader.java
+/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/model/AsinHistory.java
+/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/model/ScrapeTask.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/dto/AsinRequest.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/repository/AsinHistoryRepository.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/service/ScraperService.java
@@ -17,10 +19,15 @@
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/dto/AsinResponse.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/scraper/ScrapeParser.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/scraper/Scraper.java
+/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/alert/DingTalkPusher.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/scraper/ProxyManager.java
+/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/alert/AlertService.java
+/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/model/Asin.java
+/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/scraper/SeleniumScraper.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/config/ProxyConfig.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/SpyglassApplication.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/model/ScrapeTaskModel.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/config/ScraperProperties.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/config/OpenApiConfig.java
+/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/scraper/AsinSnapshot.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/repository/ScrapeTaskRepository.java

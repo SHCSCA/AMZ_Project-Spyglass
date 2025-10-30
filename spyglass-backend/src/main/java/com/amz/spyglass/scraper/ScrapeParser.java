@@ -62,7 +62,7 @@ public class ScrapeParser {
                 try { if (!txt.isEmpty()) bsr = Integer.parseInt(txt); } catch (NumberFormatException ex) {}
             }
         }
-        s.setBsr(bsr);
+    s.setBsr(bsr);
 
         // inventory: 简单查找 "In Stock" 或数字形式
         Integer inventory = null;
@@ -76,7 +76,7 @@ public class ScrapeParser {
                 try { if (!digits.isEmpty()) inventory = Integer.parseInt(digits); } catch (NumberFormatException ex) {}
             }
         }
-        s.setInventory(inventory);
+    s.setInventory(inventory);
 
         // image md5: 获取主图 URL，然后对 URL 字符串做 MD5（注意：这不是图片内容的 MD5，仅作为占位）
         String imgUrl = null;
@@ -85,12 +85,54 @@ public class ScrapeParser {
             imgUrl = img.attr("src");
             if (imgUrl == null || imgUrl.isEmpty()) imgUrl = img.attr("data-old-hires");
         }
-        s.setImageMd5(imgUrl == null ? null : md5Hex(imgUrl));
+    s.setImageMd5(imgUrl == null ? null : md5Hex(imgUrl));
 
         // A+ 内容 MD5：尝试根据 aplus 区域获取 HTML 并计算 MD5（同样仅基于 HTML 字符串）
         Element aplus = doc.selectFirst("#aplus, .aplus, .a-plus");
         String aplusHtml = aplus == null ? null : aplus.html();
         s.setAplusMd5(aplusHtml == null ? null : md5Hex(aplusHtml));
+
+        // 评论总数与平均评分（常见选择器）
+        try {
+            String reviewsText = null;
+            org.jsoup.nodes.Element revEl = doc.selectFirst("#acrCustomerReviewText, #reviewSummary .a-section .a-size-base");
+            if (revEl != null) reviewsText = revEl.text();
+            if (reviewsText != null) {
+                String digits = reviewsText.replaceAll("[^0-9]", "");
+                if (!digits.isEmpty()) s.setTotalReviews(Integer.parseInt(digits));
+            }
+
+            // 平均评分选择器
+            org.jsoup.nodes.Element avgEl = doc.selectFirst("#averageCustomerReviews .a-icon-alt, span[data-hook=rating-out-of-text], .review-rating");
+            if (avgEl != null) {
+                String avgText = avgEl.text().replaceAll("[^0-9\\.]", "");
+                if (!avgText.isEmpty()) s.setAvgRating(new java.math.BigDecimal(avgText));
+            }
+        } catch (Exception ignored) {}
+
+        // 尝试抓取最近的差评（1-3星），选择评论列表中第一个满足条件的项
+        try {
+            org.jsoup.select.Elements reviewEls = doc.select(".review, .a-section.review");
+            for (org.jsoup.nodes.Element re : reviewEls) {
+                String ratingText = null;
+                org.jsoup.nodes.Element r = re.selectFirst(".a-icon-alt, .review-rating");
+                if (r != null) ratingText = r.text();
+                if (ratingText != null) {
+                    String digit = ratingText.replaceAll("[^0-9]", "");
+                    if (!digit.isEmpty()) {
+                        int rating = Integer.parseInt(digit.substring(0, Math.min(digit.length(), 1)));
+                        if (rating >=1 && rating <=3) {
+                            // 找到差评，记录文本到 aplusMd5 临时字段（或可以扩展表）
+                            org.jsoup.nodes.Element content = re.selectFirst(".review-text, .a-size-base.review-text");
+                            if (content != null) {
+                                s.setAplusMd5(md5Hex(content.text()));
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
 
         return s;
     }

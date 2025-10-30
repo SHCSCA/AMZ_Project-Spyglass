@@ -14,7 +14,7 @@ import java.time.Instant;
  * @since 2025-10-30
  */
 @Data
-public class AsinSnapshotDTO {
+public class AsinSnapshot {
 
     /**
      * 商品标题
