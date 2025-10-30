@@ -2,6 +2,7 @@ package com.amz.spyglass.controller;
 
 import com.amz.spyglass.service.ScraperService;
 import com.amz.spyglass.scraper.AsinSnapshotDTO;
+import com.amz.spyglass.scraper.InventoryEstimator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,9 +26,9 @@ public class TestController {
     private static final Logger logger = LoggerFactory.getLogger(TestController.class);
     
     private final ScraperService scraperService;
-    private final com.amz.spyglass.scraper.InventoryEstimator inventoryEstimator;
+    private final InventoryEstimator inventoryEstimator;
     
-    public TestController(ScraperService scraperService, com.amz.spyglass.scraper.InventoryEstimator inventoryEstimator) {
+    public TestController(ScraperService scraperService, InventoryEstimator inventoryEstimator) {
         this.scraperService = scraperService;
         this.inventoryEstimator = inventoryEstimator;
     }

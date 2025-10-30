@@ -1,6 +1,8 @@
 package com.amz.spyglass.scraper;
 
+import com.amz.spyglass.config.ProxyConfig;
 import org.openqa.selenium.By;
+import org.openqa.selenium.Keys;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
@@ -93,7 +95,7 @@ public class InventoryEstimator {
                     updateBtn.click();
                 } catch (Exception e) {
                     // 如果没有更新按钮，尝试触发change事件
-                    qtyInput.sendKeys(org.openqa.selenium.Keys.ENTER);
+                    qtyInput.sendKeys(Keys.ENTER);
                 }
                 
                 // 等待页面响应
@@ -170,7 +172,7 @@ public class InventoryEstimator {
         
         // 添加代理支持
         try {
-            com.amz.spyglass.config.ProxyConfig.ProxyProvider provider = proxyManager.nextProxy();
+            ProxyConfig.ProxyProvider provider = proxyManager.nextProxy();
             if (provider != null) {
                 String proxyUrl = provider.getUrl();
                 if (proxyUrl != null && !proxyUrl.isEmpty()) {
