@@ -1,6 +1,4 @@
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/scraper/ImageDownloader.java
-/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/model/AsinHistory.java
-/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/model/ScrapeTask.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/dto/AsinRequest.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/repository/AsinHistoryRepository.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/service/ScraperService.java
@@ -9,7 +7,6 @@
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/scraper/JsoupScraper.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/repository/AsinRepository.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/scheduler/ScraperScheduler.java
-/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/config/ProxyProperties.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/controller/AsinController.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/dto/AsinHistoryResponse.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/model/AsinModel.java
@@ -22,7 +19,6 @@
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/alert/DingTalkPusher.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/scraper/ProxyManager.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/alert/AlertService.java
-/workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/model/Asin.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/scraper/SeleniumScraper.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/config/ProxyConfig.java
 /workspaces/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/SpyglassApplication.java
