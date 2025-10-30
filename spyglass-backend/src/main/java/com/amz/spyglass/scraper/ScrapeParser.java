@@ -3,6 +3,8 @@ package com.amz.spyglass.scraper;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -16,6 +18,8 @@ import java.util.Locale;
  * 注意：解析规则使用启发式选择器，亚马逊页面多变，生产环境需根据实际页面调整或使用更稳健的策略。
  */
 public class ScrapeParser {
+    
+    private static final Logger logger = LoggerFactory.getLogger(ScrapeParser.class);
 
     /**
      * 解析 Document 并返回填充的 AsinSnapshot（不包含 snapshotAt，调用方可设置）
@@ -28,41 +32,88 @@ public class ScrapeParser {
         String title = doc.title();
         s.setTitle(title);
 
-        // price: 尝试多个常见选择器
+        // price: 尝试多个常见选择器（扩展版本）
         String priceText = null;
-        Element p1 = doc.selectFirst("#priceblock_ourprice, #priceblock_dealprice, .a-price .a-offscreen");
-        if (p1 != null) priceText = p1.text();
-        if (priceText == null) {
-            Element p2 = doc.selectFirst("#tp_price_block_total_price_ww");
-            if (p2 != null) priceText = p2.text();
-        }
-        s.setPrice(parsePriceToBigDecimal(priceText));
-
-        // BSR: 在详情或者排名区域查找 "Best Sellers Rank" 或者 "Best Sellers"
-        Integer bsr = null;
-        Elements detailBullets = doc.select("#detailBullets_feature_div li, #productDetails_detailBullets_sections1 tr");
-        for (Element e : detailBullets) {
-            String txt = e.text().toLowerCase(Locale.ROOT);
-            if (txt.contains("best sellers rank") || txt.contains("best seller rank") || txt.contains("best sellers")) {
-                String digits = txt.replaceAll("[^0-9,]", "");
-                digits = digits.replaceAll(",", "");
-                try {
-                    if (!digits.isEmpty()) bsr = Integer.parseInt(digits);
-                } catch (NumberFormatException ex) {
-                    // ignore
+        String[] priceSelectors = {
+            "#priceblock_ourprice",
+            "#priceblock_dealprice",
+            ".a-price .a-offscreen",
+            "#tp_price_block_total_price_ww",
+            "#corePrice_feature_div .a-price .a-offscreen",
+            ".a-price[data-a-color=price] .a-offscreen",
+            "#price_inside_buybox",
+            "#newBuyBoxPrice",
+            "[data-a-color=price] .a-offscreen"
+        };
+        
+        for (String selector : priceSelectors) {
+            Element pEl = doc.selectFirst(selector);
+            if (pEl != null) {
+                priceText = pEl.text();
+                if (priceText != null && !priceText.trim().isEmpty()) {
+                    logger.debug("价格选择器命中: {} -> {}", selector, priceText);
+                    break;
                 }
-                break;
             }
         }
+        
+        BigDecimal price = parsePriceToBigDecimal(priceText);
+        s.setPrice(price);
+        if (price == null) {
+            logger.debug("价格解析失败，所有选择器均未命中");
+        }
+
+        // BSR: 在详情或者排名区域查找 "Best Sellers Rank" 或者 "Best Sellers"（扩展版本）
+        Integer bsr = null;
+        
+        // 尝试多个选择器区域
+        String[] bsrContainerSelectors = {
+            "#detailBullets_feature_div li",
+            "#productDetails_detailBullets_sections1 tr",
+            "#detailBulletsWrapper_feature_div li",
+            "#productDetails_techSpec_section_1 tr",
+            ".product-facts-detail"
+        };
+        
+        for (String containerSelector : bsrContainerSelectors) {
+            Elements elements = doc.select(containerSelector);
+            for (Element e : elements) {
+                String txt = e.text().toLowerCase(Locale.ROOT);
+                if (txt.contains("best sellers rank") || txt.contains("best seller rank") || txt.contains("best sellers")) {
+                    String digits = txt.replaceAll("[^0-9,]", "");
+                    digits = digits.replaceAll(",", "");
+                    try {
+                        if (!digits.isEmpty()) {
+                            bsr = Integer.parseInt(digits);
+                            logger.debug("BSR选择器命中: {} -> {}", containerSelector, bsr);
+                        }
+                    } catch (NumberFormatException ex) {
+                        // ignore
+                    }
+                    break;
+                }
+            }
+            if (bsr != null) break;
+        }
+        
         // 备用选择器：查找 "#SalesRank"
         if (bsr == null) {
             Element sr = doc.selectFirst("#SalesRank");
             if (sr != null) {
                 String txt = sr.text().replaceAll("[^0-9,]", "").replaceAll(",", "");
-                try { if (!txt.isEmpty()) bsr = Integer.parseInt(txt); } catch (NumberFormatException ex) {}
+                try { 
+                    if (!txt.isEmpty()) {
+                        bsr = Integer.parseInt(txt);
+                        logger.debug("BSR备用选择器命中: #SalesRank -> {}", bsr);
+                    }
+                } catch (NumberFormatException ex) {}
             }
         }
-    s.setBsr(bsr);
+        
+        s.setBsr(bsr);
+        if (bsr == null) {
+            logger.debug("BSR解析失败，所有选择器均未命中");
+        }
 
         // inventory: 简单查找 "In Stock" 或数字形式
         Integer inventory = null;
@@ -108,23 +159,64 @@ public class ScrapeParser {
         String aplusHtml = aplus == null ? null : aplus.html();
         s.setAplusMd5(aplusHtml == null ? null : md5Hex(aplusHtml));
 
-        // 评论总数与平均评分（常见选择器）
+        // 评论总数与平均评分（扩展选择器版本）
         try {
             String reviewsText = null;
-            org.jsoup.nodes.Element revEl = doc.selectFirst("#acrCustomerReviewText, #reviewSummary .a-section .a-size-base");
-            if (revEl != null) reviewsText = revEl.text();
+            String[] reviewCountSelectors = {
+                "#acrCustomerReviewText",
+                "#reviewSummary .a-section .a-size-base",
+                "[data-hook=total-review-count]",
+                ".averageStarRatingNumerical",
+                "#acrPopover + .a-declarative .a-size-base"
+            };
+            
+            for (String selector : reviewCountSelectors) {
+                Element revEl = doc.selectFirst(selector);
+                if (revEl != null) {
+                    reviewsText = revEl.text();
+                    if (reviewsText != null && !reviewsText.trim().isEmpty()) {
+                        logger.debug("评论总数选择器命中: {} -> {}", selector, reviewsText);
+                        break;
+                    }
+                }
+            }
+            
             if (reviewsText != null) {
                 String digits = reviewsText.replaceAll("[^0-9]", "");
-                if (!digits.isEmpty()) s.setTotalReviews(Integer.parseInt(digits));
+                if (!digits.isEmpty()) {
+                    s.setTotalReviews(Integer.parseInt(digits));
+                }
+            } else {
+                logger.debug("评论总数解析失败，所有选择器均未命中");
             }
 
-            // 平均评分选择器
-            org.jsoup.nodes.Element avgEl = doc.selectFirst("#averageCustomerReviews .a-icon-alt, span[data-hook=rating-out-of-text], .review-rating");
-            if (avgEl != null) {
-                String avgText = avgEl.text().replaceAll("[^0-9\\.]", "");
-                if (!avgText.isEmpty()) s.setAvgRating(new java.math.BigDecimal(avgText));
+            // 平均评分扩展选择器
+            String[] ratingSelectors = {
+                "#averageCustomerReviews .a-icon-alt",
+                "span[data-hook=rating-out-of-text]",
+                ".review-rating",
+                "#acrPopover",
+                ".a-icon-star .a-icon-alt"
+            };
+            
+            for (String selector : ratingSelectors) {
+                Element avgEl = doc.selectFirst(selector);
+                if (avgEl != null) {
+                    String avgText = avgEl.text().replaceAll("[^0-9\\.]", "");
+                    if (!avgText.isEmpty()) {
+                        s.setAvgRating(new java.math.BigDecimal(avgText));
+                        logger.debug("平均评分选择器命中: {} -> {}", selector, avgText);
+                        break;
+                    }
+                }
             }
-        } catch (Exception ignored) {}
+            
+            if (s.getAvgRating() == null) {
+                logger.debug("平均评分解析失败，所有选择器均未命中");
+            }
+        } catch (Exception e) {
+            logger.debug("评论/评分解析异常: {}", e.getMessage());
+        }
 
         // 尝试抓取最近的差评（1-3星），选择评论列表中第一个满足条件的项
         try {

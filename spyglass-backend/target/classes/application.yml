@@ -29,6 +29,8 @@ springdoc:
 
 # 爬虫配置
 scraper:
+  selenium:
+    enabled: ${SELENIUM_ENABLED:true}  # 是否启用Selenium（资源受限时可设为false）
   proxy:
     enabled: true
     providers:
@@ -37,3 +39,10 @@ scraper:
         url: ${PROXY_URL:}
         username: ${PROXY_USER:}
         password: ${PROXY_PASS:}
+  fixedDelayMs: ${SCRAPER_DELAY:14400000}  # 抓取间隔（默认4小时）
+  downloadImageBinary: ${DOWNLOAD_IMAGE:false}  # 是否下载图片二进制计算真实MD5
+
+# 钉钉配置
+dingtalk:
+  webhook: ${DINGTALK_WEBHOOK:}
+  enabled: ${DINGTALK_ENABLED:true}

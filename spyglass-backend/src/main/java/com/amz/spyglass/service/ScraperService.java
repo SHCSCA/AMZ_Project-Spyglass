@@ -4,6 +4,8 @@ import com.amz.spyglass.scraper.Scraper;
 import com.amz.spyglass.scraper.SeleniumScraper;
 import com.amz.spyglass.scraper.JsoupScraper;
 import com.amz.spyglass.alert.AlertService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -13,6 +15,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class ScraperService {
+    
+    private static final Logger logger = LoggerFactory.getLogger(ScraperService.class);
 
     private final JsoupScraper jsoupScraper;
     private final SeleniumScraper seleniumScraper;
@@ -32,18 +36,62 @@ public class ScraperService {
     }
 
     /**
-     * 抓取并返回完整的 Asin 快照：优先使用 Jsoup（轻量），当库存等关键字段为空时回退到 Selenium
+     * 抓取并返回完整的 Asin 快照：优先使用 Jsoup（轻量），当关键字段为空时回退到 Selenium 补全
      */
     public com.amz.spyglass.scraper.AsinSnapshotDTO fetchSnapshot(String url) throws Exception {
+        logger.info("开始抓取: {}", url);
         com.amz.spyglass.scraper.AsinSnapshotDTO snap = jsoupScraper.fetchSnapshot(url);
-        // 如果 inventory 未解析到则尝试用 Selenium 进行补抓
-        if (snap.getInventory() == null) {
+        
+        // 检查哪些关键字段为空
+        boolean needSelenium = snap.getPrice() == null || snap.getBsr() == null || 
+                              snap.getInventory() == null || snap.getTotalReviews() == null || 
+                              snap.getAvgRating() == null || snap.getBulletPoints() == null;
+        
+        if (needSelenium) {
+            logger.info("Jsoup抓取字段不完整，启用Selenium补全 - price:{}, bsr:{}, inventory:{}, reviews:{}, rating:{}, bullets:{}", 
+                snap.getPrice() != null, snap.getBsr() != null, snap.getInventory() != null, 
+                snap.getTotalReviews() != null, snap.getAvgRating() != null, snap.getBulletPoints() != null);
+            
             try {
                 com.amz.spyglass.scraper.AsinSnapshotDTO s2 = seleniumScraper.fetchSnapshot(url);
-                // 合并非空字段
-                if (s2.getInventory() != null) snap.setInventory(s2.getInventory());
-            } catch (Exception ignored) {}
+                
+                // 合并非空字段（Selenium补全Jsoup缺失的部分）
+                if (snap.getPrice() == null && s2.getPrice() != null) {
+                    snap.setPrice(s2.getPrice());
+                    logger.debug("Selenium补全价格: {}", s2.getPrice());
+                }
+                if (snap.getBsr() == null && s2.getBsr() != null) {
+                    snap.setBsr(s2.getBsr());
+                    logger.debug("Selenium补全BSR: {}", s2.getBsr());
+                }
+                if (snap.getInventory() == null && s2.getInventory() != null) {
+                    snap.setInventory(s2.getInventory());
+                    logger.debug("Selenium补全库存: {}", s2.getInventory());
+                }
+                if (snap.getTotalReviews() == null && s2.getTotalReviews() != null) {
+                    snap.setTotalReviews(s2.getTotalReviews());
+                    logger.debug("Selenium补全评论数: {}", s2.getTotalReviews());
+                }
+                if (snap.getAvgRating() == null && s2.getAvgRating() != null) {
+                    snap.setAvgRating(s2.getAvgRating());
+                    logger.debug("Selenium补全评分: {}", s2.getAvgRating());
+                }
+                if (snap.getBulletPoints() == null && s2.getBulletPoints() != null) {
+                    snap.setBulletPoints(s2.getBulletPoints());
+                    logger.debug("Selenium补全五点要点");
+                }
+                if (snap.getTitle() == null && s2.getTitle() != null) {
+                    snap.setTitle(s2.getTitle());
+                    logger.debug("Selenium补全标题");
+                }
+            } catch (Exception e) {
+                logger.warn("Selenium补全失败: {}", e.getMessage());
+            }
         }
+        
+        logger.info("抓取完成 - price:{}, bsr:{}, inventory:{}, reviews:{}, rating:{}", 
+            snap.getPrice(), snap.getBsr(), snap.getInventory(), snap.getTotalReviews(), snap.getAvgRating());
+        
         return snap;
     }
 }

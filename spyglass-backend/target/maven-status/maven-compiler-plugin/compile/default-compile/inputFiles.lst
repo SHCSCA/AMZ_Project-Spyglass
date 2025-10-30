@@ -2,6 +2,7 @@
 /home/runner/work/AMZ_Project-Spyglass/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/alert/AlertService.java
 /home/runner/work/AMZ_Project-Spyglass/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/scraper/SeleniumScraper.java
 /home/runner/work/AMZ_Project-Spyglass/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/repository/AsinHistoryRepository.java
+/home/runner/work/AMZ_Project-Spyglass/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/controller/TestController.java
 /home/runner/work/AMZ_Project-Spyglass/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/model/AsinHistoryModel.java
 /home/runner/work/AMZ_Project-Spyglass/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/scheduler/ScraperScheduler.java
 /home/runner/work/AMZ_Project-Spyglass/AMZ_Project-Spyglass/spyglass-backend/src/main/java/com/amz/spyglass/alert/DingTalkPusher.java

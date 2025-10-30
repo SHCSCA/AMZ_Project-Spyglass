@@ -68,4 +68,17 @@ public class ScrapeTaskModel extends BaseEntityModel {
      */
     @Column(nullable = false)
     private Instant runAt = Instant.now();
+    
+    /**
+     * 任务完成时间
+     */
+    @Column
+    private Instant finishedAt;
+    
+    /**
+     * 标记任务已完成
+     */
+    public void markFinished() {
+        this.finishedAt = Instant.now();
+    }
 }

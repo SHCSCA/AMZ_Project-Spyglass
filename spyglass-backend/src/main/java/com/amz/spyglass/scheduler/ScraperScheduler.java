@@ -56,12 +56,18 @@ public class ScraperScheduler {
      * ASIN 历史记录仓储服务，用于保存抓取快照
      */
     private final com.amz.spyglass.repository.AsinHistoryRepository asinHistoryRepository;
+    
+    /**
+     * 告警服务，用于对比新旧快照并触发告警
+     */
+    private final com.amz.spyglass.alert.AlertService alertService;
 
-    public ScraperScheduler(AsinRepository asinRepository, ScraperService scraperService, ScrapeTaskRepository scrapeTaskRepository, com.amz.spyglass.repository.AsinHistoryRepository asinHistoryRepository) {
+    public ScraperScheduler(AsinRepository asinRepository, ScraperService scraperService, ScrapeTaskRepository scrapeTaskRepository, com.amz.spyglass.repository.AsinHistoryRepository asinHistoryRepository, com.amz.spyglass.alert.AlertService alertService) {
         this.asinRepository = asinRepository;
         this.scraperService = scraperService;
         this.scrapeTaskRepository = scrapeTaskRepository;
         this.asinHistoryRepository = asinHistoryRepository;
+        this.alertService = alertService;
     }
 
     /**
@@ -120,9 +126,18 @@ public class ScraperScheduler {
             // 调用 ScraperService 获取完整的页面快照（包含 price/bsr/inventory/imageMd5/aplusMd5）
             com.amz.spyglass.scraper.AsinSnapshotDTO snap = scraperService.fetchSnapshot("https://www.amazon.com/dp/" + a.getAsin());
 
+            // 先触发告警对比（在保存新快照之前，与历史数据对比）
+            try {
+                alertService.processAlerts(a, snap);
+                logger.info("告警对比完成: {}", a.getAsin());
+            } catch (Exception e) {
+                logger.error("告警处理失败 ASIN: {}, 错误: {}", a.getAsin(), e.getMessage(), e);
+            }
+
             task.setStatus(ScrapeTaskModel.TaskStatus.SUCCESS);
             task.setMessage("title=" + (snap.getTitle() == null ? "" : snap.getTitle()));
             task.setRunAt(Instant.now());
+            task.setFinishedAt(Instant.now()); // 记录完成时间
             scrapeTaskRepository.save(task);
 
             // 保存历史快照到 AsinHistory 实体
@@ -136,8 +151,12 @@ public class ScraperScheduler {
                 h.setImageMd5(snap.getImageMd5());
                 h.setAplusMd5(snap.getAplusMd5());
                 h.setBulletPoints(snap.getBulletPoints());
+                h.setLatestNegativeReviewMd5(snap.getLatestNegativeReviewMd5());
+                h.setTotalReviews(snap.getTotalReviews());
+                h.setAvgRating(snap.getAvgRating());
                 h.setSnapshotAt(snap.getSnapshotAt() == null ? Instant.now() : snap.getSnapshotAt());
                 asinHistoryRepository.save(h);
+                logger.info("快照已保存: {}", a.getAsin());
             } catch (Exception e) {
                 logger.warn("failed to save asin history for {}: {}", asinId, e.getMessage());
             }

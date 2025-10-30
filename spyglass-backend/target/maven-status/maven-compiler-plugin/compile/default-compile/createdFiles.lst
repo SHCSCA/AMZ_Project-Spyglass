@@ -17,6 +17,7 @@ com/amz/spyglass/model/AsinHistoryModel.class
 com/amz/spyglass/controller/AsinController.class
 com/amz/spyglass/scheduler/ScraperScheduler.class
 com/amz/spyglass/model/ScrapeTaskModel$TaskStatus.class
+com/amz/spyglass/controller/TestController.class
 com/amz/spyglass/scraper/ProxyManager.class
 com/amz/spyglass/config/OpenApiConfig.class
 com/amz/spyglass/service/ScraperService.class
