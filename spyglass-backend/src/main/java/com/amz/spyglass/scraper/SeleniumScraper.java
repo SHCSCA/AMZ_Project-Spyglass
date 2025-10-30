@@ -1,26 +1,39 @@
 package com.amz.spyglass.scraper;
 
-import org.openqa.selenium.By;
-import org.openqa.selenium.WebDriver;
+// 移除 WebDriverManager 以避免编译错误，需在运行环境自行保证 chromedriver 可用
+import org.openqa.selenium.*;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.support.ui.WebDriverWait;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.util.List;
+import java.util.Locale;
+
 /**
- * Selenium 抓取器（用于处理 JS 渲染的页面，如库存抓取）
- * 注意：运行此实现需要容器/环境中提供 Chrome + chromedriver 或者使用远程 WebDriver 服务。
+ * Selenium 抓取器（用于处理 JS 渲染的页面，如库存 / 动态加载价格 / 评价等）。
+ * 说明：用于补充 Jsoup 静态抓取无法获取或为空的字段。
  */
 @Component
 public class SeleniumScraper implements Scraper {
 
-    @Override
-    public String fetchTitle(String url) throws Exception {
+    private ChromeOptions buildOptions() {
         ChromeOptions options = new ChromeOptions();
-        options.addArguments("--headless=new");
-        options.addArguments("--no-sandbox");
-        options.addArguments("--disable-dev-shm-usage");
+        options.addArguments("--headless=new", "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--window-size=1920,1080");
+        options.setPageLoadStrategy(PageLoadStrategy.NORMAL);
+        return options;
+    }
 
-        WebDriver driver = new ChromeDriver(options);
+    private WebDriver createDriver() {
+        // 假设 chromedriver 已在 PATH 中或由系统驱动映射
+        return new ChromeDriver(buildOptions());
+    }
+
+    @Override
+    public String fetchTitle(String url) { // 去掉 throws Exception
+        WebDriver driver = createDriver();
         try {
             driver.get(url);
             return driver.getTitle();
@@ -30,30 +43,151 @@ public class SeleniumScraper implements Scraper {
     }
 
     @Override
-    public AsinSnapshotDTO fetchSnapshot(String url) throws Exception {
-        ChromeOptions options = new ChromeOptions();
-        options.addArguments("--headless=new");
-        options.addArguments("--no-sandbox");
-        options.addArguments("--disable-dev-shm-usage");
-
-        WebDriver driver = new ChromeDriver(options);
+    public AsinSnapshotDTO fetchSnapshot(String url) { // 去掉 throws Exception
+        WebDriver driver = createDriver();
+        AsinSnapshotDTO dto = new AsinSnapshotDTO();
         try {
             driver.get(url);
-            AsinSnapshotDTO dto = new AsinSnapshotDTO();
+            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+            try { wait.until(d -> ((JavascriptExecutor)d).executeScript("return document.readyState").equals("complete")); } catch (Exception ignored) {}
             dto.setTitle(driver.getTitle());
 
-            // 试图读取库存信息（site-specific, example selector）
-            try {
-                String invText = driver.findElement(By.cssSelector("#availability, #availability_feature_div")).getText();
-                // 简化：提取数字
-                String digits = invText.replaceAll("[^0-9]", "");
-                if (!digits.isEmpty()) dto.setInventory(Integer.parseInt(digits));
-            } catch (Exception ignored) {}
+            // 价格
+            if (dto.getPrice() == null) {
+                try {
+                    WebElement priceEl = firstPresent(driver,
+                            By.cssSelector("span.a-price[data-a-color=price] span.a-offscreen"),
+                            By.cssSelector("#priceblock_ourprice"),
+                            By.cssSelector("#priceblock_dealprice"),
+                            By.cssSelector("#tp_price_block_total_price_ww"));
+                    if (priceEl != null) dto.setPrice(parsePrice(priceEl.getText()));
+                } catch (Exception ignored) {}
+            }
 
-            // 其他字段交由 ScrapeParser/Jsoup 补充
-            return dto;
+            // BSR
+            if (dto.getBsr() == null) {
+                try {
+                    List<WebElement> detailBullets = driver.findElements(By.cssSelector("#detailBullets_feature_div li, #productDetails_detailBullets_sections1 tr"));
+                    for (WebElement el : detailBullets) {
+                        String txt = el.getText().toLowerCase(Locale.ROOT);
+                        if (txt.contains("best sellers rank") || txt.contains("best sellers")) {
+                            String digits = txt.replaceAll("[^0-9]", "");
+                            if (!digits.isEmpty()) { dto.setBsr(Integer.parseInt(digits)); break; }
+                        }
+                    }
+                    if (dto.getBsr() == null) {
+                        try {
+                            WebElement sr = driver.findElement(By.cssSelector("#SalesRank"));
+                            String digits = sr.getText().replaceAll("[^0-9]", "");
+                            if (!digits.isEmpty()) dto.setBsr(Integer.parseInt(digits));
+                        } catch (Exception ignoredInner) {}
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            // 五点要点
+            if (dto.getBulletPoints() == null) {
+                try {
+                    List<WebElement> bullets = driver.findElements(By.cssSelector("#feature-bullets li"));
+                    StringBuilder sb = new StringBuilder();
+                    for (WebElement b : bullets) {
+                        String t = b.getText().trim();
+                        if (t.isEmpty()) continue;
+                        if (!sb.isEmpty()) sb.append('\n');
+                        sb.append(t);
+                    }
+                    if (!sb.isEmpty()) dto.setBulletPoints(sb.toString());
+                } catch (Exception ignored) {}
+            }
+
+            // 主图 MD5 （基于 URL）
+            if (dto.getImageMd5() == null) {
+                try {
+                    WebElement img = firstPresent(driver,
+                            By.cssSelector("#landingImage"), By.cssSelector("#imgTagWrapperId img"), By.cssSelector("img#main-image"));
+                    if (img != null) {
+                        String src = img.getAttribute("src");
+                        if (src != null && !src.isEmpty()) dto.setImageMd5(md5Hex(src));
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            // A+ 内容 MD5
+            if (dto.getAplusMd5() == null) {
+                try {
+                    WebElement aplus = firstPresent(driver, By.cssSelector("#aplus"), By.cssSelector(".aplus"), By.cssSelector(".a-plus"));
+                    if (aplus != null) dto.setAplusMd5(md5Hex(aplus.getAttribute("innerHTML")));
+                } catch (Exception ignored) {}
+            }
+
+            // 评论总数 & 平均评分
+            if (dto.getTotalReviews() == null) {
+                try {
+                    WebElement rev = driver.findElement(By.cssSelector("#acrCustomerReviewText"));
+                    String digits = rev.getText().replaceAll("[^0-9]", "");
+                    if (!digits.isEmpty()) dto.setTotalReviews(Integer.parseInt(digits));
+                } catch (Exception ignored) {}
+            }
+            if (dto.getAvgRating() == null) {
+                try {
+                    WebElement rating = firstPresent(driver, By.cssSelector("span[data-hook=rating-out-of-text]"), By.cssSelector("#averageCustomerReviews .a-icon-alt"));
+                    if (rating != null) {
+                        String txt = rating.getText().split("out")[0].replaceAll("[^0-9.]", "").trim();
+                        if (!txt.isEmpty()) dto.setAvgRating(new BigDecimal(txt));
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            // 库存（999 加购法简化：若页面能找到库存相关提示，或“仅剩”提示）
+            if (dto.getInventory() == null) {
+                try {
+                    WebElement availability = firstPresent(driver,
+                            By.cssSelector("#availability"),
+                            By.cssSelector("#availability_feature_div"),
+                            By.cssSelector("#desktop_qualifiedBuyBox_feature_div"));
+                    if (availability != null) {
+                        String txt = availability.getText().toLowerCase(Locale.ROOT);
+                        if (txt.contains("only") && txt.contains("left in stock")) {
+                            String digits = txt.replaceAll("[^0-9]", "");
+                            if (!digits.isEmpty()) dto.setInventory(Integer.parseInt(digits));
+                        } else if (txt.contains("in stock")) {
+                            dto.setInventory(null); // 标记为有货但未知数量
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+
         } finally {
             try { driver.quit(); } catch (Exception ignored) {}
         }
+        return dto;
+    }
+
+    private WebElement firstPresent(WebDriver driver, By... selectors) {
+        for (By s : selectors) {
+            try {
+                List<WebElement> list = driver.findElements(s);
+                if (!list.isEmpty()) return list.get(0);
+            } catch (Exception ignored) {}
+        }
+        return null;
+    }
+
+    private BigDecimal parsePrice(String text) {
+        if (text == null) return null;
+        String cleaned = text.replaceAll("[^0-9.\\-]", ""); // 修正正则
+        if (cleaned.isEmpty()) return null;
+        try { return new BigDecimal(cleaned); } catch (Exception e) { return null; }
+    }
+
+    private String md5Hex(String input) {
+        if (input == null) return null;
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
+            byte[] bytes = md.digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : bytes) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) { return null; }
     }
 }

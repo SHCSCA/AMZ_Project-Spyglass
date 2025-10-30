@@ -36,15 +36,21 @@ public class ScraperService {
      */
     public com.amz.spyglass.scraper.AsinSnapshotDTO fetchSnapshot(String url) throws Exception {
         com.amz.spyglass.scraper.AsinSnapshotDTO snap = jsoupScraper.fetchSnapshot(url);
-        // 如果 inventory 未解析到则尝试用 Selenium 进行补抓
-        if (snap.getInventory() == null) {
+        boolean needSelenium = snap.getPrice() == null || snap.getBsr() == null || snap.getInventory() == null
+                || snap.getTotalReviews() == null || snap.getAvgRating() == null || snap.getBulletPoints() == null;
+        if (needSelenium) {
             try {
                 com.amz.spyglass.scraper.AsinSnapshotDTO s2 = seleniumScraper.fetchSnapshot(url);
-                // 合并非空字段
-                if (s2.getInventory() != null) snap.setInventory(s2.getInventory());
+                if (snap.getPrice() == null && s2.getPrice() != null) snap.setPrice(s2.getPrice());
+                if (snap.getBsr() == null && s2.getBsr() != null) snap.setBsr(s2.getBsr());
+                if (snap.getInventory() == null && s2.getInventory() != null) snap.setInventory(s2.getInventory());
+                if (snap.getTotalReviews() == null && s2.getTotalReviews() != null) snap.setTotalReviews(s2.getTotalReviews());
+                if (snap.getAvgRating() == null && s2.getAvgRating() != null) snap.setAvgRating(s2.getAvgRating());
+                if (snap.getBulletPoints() == null && s2.getBulletPoints() != null) snap.setBulletPoints(s2.getBulletPoints());
+                if (snap.getImageMd5() == null && s2.getImageMd5() != null) snap.setImageMd5(s2.getImageMd5());
+                if (snap.getAplusMd5() == null && s2.getAplusMd5() != null) snap.setAplusMd5(s2.getAplusMd5());
             } catch (Exception ignored) {}
         }
         return snap;
     }
 }
-

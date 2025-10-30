@@ -143,3 +143,82 @@
 * 已成功在**线上服务器**（美国）通过Docker Compose部署，并集成了**付费住宅代理**。
 * **(已解决)** 数据库技术栈统一为 **MySQL**。
 * **(已降级)** 登录认证 (F-MOD-1) 移至 V2.0。
+
+---
+
+## 6. 操作指南 (Operation Guide)
+
+### 6.1. 快速启动 (Docker)
+
+本项目通过 `docker-compose` 实现一键部署，集成了后端服务与数据库。这是推荐的生产和测试环境运行方式。
+
+**前提条件:**
+- 已安装 Docker 和 Docker Compose。
+- （如果需要）根据项目根目录下的 `docker-compose.yml` 文件，配置好必要的环境变量（例如，在 `.env` 文件中）。
+
+**启动命令:**
+```bash
+# 在项目根目录运行，后台启动并构建镜像
+docker compose up --build -d
+```
+
+服务启动后，可以通过 `docker compose logs -f spyglass-backend` 查看后端实时日志。
+
+### 6.2. 本地开发 (IDE / 命令行)
+
+如果你希望在本地直接运行后端服务进行开发调试：
+
+1.  **配置数据库:** 确保本地已安装并运行 `MySQL`。在 `spyglass-backend/src/main/resources/application.yml` 中，修改 `spring.datasource` 部分，使其指向你的本地数据库实例。
+2.  **配置环境变量:** 在你的 IDE 运行配置中或操作系统中设置必要的环境变量，如 `DINGTALK_WEBHOOK`、代理服务器地址等。
+3.  **运行后端:**
+    ```bash
+    # 进入后端模块目录
+    cd spyglass-backend
+    # 使用 Maven Wrapper 运行
+    ./mvnw spring-boot:run
+    ```
+
+### 6.3. API 接口文档
+
+系统启动后，无论使用哪种方式，都可以通过以下地址访问由 `springdoc-openapi` 自动生成的 API 文档：
+
+-   **OpenAPI 3.0 JSON 规范 (供机器读取):**
+    `http://localhost:8080/v3/api-docs`
+
+-   **Swagger UI 交互式文档 (供人查阅和测试):**
+    `http://localhost:8080/swagger-ui.html`
+
+> **注意:** 如果你通过 Nginx 或其他反向代理访问，请将 `localhost:8080` 替换为你的实际访问域名和端口。
+
+### 6.4. 环境变量配置
+
+所有敏感���息和环境特定配置都应通过环境变量注入，以遵循安全和十二要素应用（Twelve-Factor App）的最佳实践。
+
+| 环境变量 | 描述 | 示例值 |
+| :--- | :--- | :--- |
+| `MYSQL_USER` | MySQL 数据库用户名 | `spyglass` |
+| `MYSQL_PASSWORD` | MySQL 数据库密码 | `a-very-strong-password` |
+| `MYSQL_DATABASE` | MySQL 数据库名称 | `spyglass_db` |
+| `MYSQL_ROOT_PASSWORD`| MySQL root 用户密码 (用于容器初始化) | `a-secret-root-password` |
+| `SPRING_DATASOURCE_URL`| JDBC 连接字符串 (在 Docker Compose 中通常指向服务名) | `jdbc:mysql://db:3306/spyglass_db` |
+| `DINGTALK_WEBHOOK` | 钉钉机器人 Webhook 地址 | `https://oapi.dingtalk.com/robot/send?access_token=...` |
+| `PROXY_PROVIDER` | 代理服务商名称 (如 `BRIGHT_DATA`) | `BRIGHT_DATA` |
+| `PROXY_HOST` | 代理服务器主机名 | `brd.superproxy.io` |
+| `PROXY_PORT` | 代理服务器端口 | `22225` |
+| `PROXY_USERNAME` | 代理认证用户名 | `brd-customer-xxx-zone-residential` |
+| `PROXY_PASSWORD` | 代理认证密码 | `your-proxy-password` |
+
+> **提示:** 在使用 `docker-compose` 时，可以在项目根目录创建一个 `.env` 文件来存放这些变量，Docker Compose 会自动加载。
+
+### 6.5. 常用 API 端点 (V1.0)
+
+以下是 V1.0 阶段的核心 API 端点，可用于前端开发或直接通过 Swagger UI 进行测试。
+
+-   **ASIN 管理:**
+    -   `GET /api/asin`: 获取所有监控的 ASIN 列表。
+    -   `POST /api/asin`: 添加一个新的 ASIN 进行监控。
+    -   `DELETE /api/asin/{id}`: 删除一个指定的 ASIN。
+    -   `PUT /api/asin/{id}/config`: 更新 ASIN 的特定配置（如昵称、库存阈值）。
+
+-   **数据查询:**
+    -   `GET /api/asin/{id}/history?range=30d`: 获取指定 ASIN 在特定时间范围内（如30天）的历史数据快照。

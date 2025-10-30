@@ -37,3 +37,8 @@ scraper:
         url: ${PROXY_URL:}
         username: ${PROXY_USER:}
         password: ${PROXY_PASS:}
+  htmlDumpEnabled: true
+  htmlDumpDir: logs/html-dump
+  randomDelayMinMs: 150
+  randomDelayMaxMs: 450
+  maxRetry: 3

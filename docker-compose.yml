@@ -1,28 +1,10 @@
 version: "3.8"
 services:
-  mysql:
-    image: mysql:8.0
-    environment:
-      MYSQL_DATABASE: amzspaglass
-      MYSQL_USER: amzspaglass
-      MYSQL_PASSWORD: RYna5tjK7nKwZd7J
-      MYSQL_ROOT_PASSWORD: rootpassword
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysqldata:/var/lib/mysql
-
   app:
     build:
       context: ./spyglass-backend
-    depends_on:
-      - mysql
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/amzspaglass?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
-      SPRING_DATASOURCE_USERNAME: amzspaglass
-      SPRING_DATASOURCE_PASSWORD: RYna5tjK7nKwZd7J
     ports:
       - "8080:8080"
+    # The application will now use the datasource configuration from its internal application.yml
+    # Make sure your application.yml is correctly configured to connect to the external database.
 
-volumes:
-  mysqldata:

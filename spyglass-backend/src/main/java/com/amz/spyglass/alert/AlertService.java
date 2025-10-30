@@ -95,4 +95,8 @@ public class AlertService {
             }
         }
     }
+
+    public void compareAndAlert(AsinModel asin, AsinSnapshotDTO newSnap) {
+        processAlerts(asin, newSnap);
+    }
 }
