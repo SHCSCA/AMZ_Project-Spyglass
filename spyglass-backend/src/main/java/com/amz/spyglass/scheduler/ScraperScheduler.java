@@ -103,7 +103,10 @@ public class ScraperScheduler {
         }
     )
     public void runForAsinAsync(Long asinId) throws Exception {
-        logger.info("开始异步抓取任务, ASIN ID: {}", asinId);
+        logger.info("开始异步抓取任务, ASIN ID: {}, 当前重试次数: {}", asinId, 
+            Optional.ofNullable(scrapeTaskRepository.findFirstByAsinIdOrderByCreatedAtDesc(asinId))
+                .map(ScrapeTaskModel::getRetryCount)
+                .orElse(0));
         ScrapeTaskModel task = new ScrapeTaskModel();
         task.setAsinId(asinId);
         task.setStatus(ScrapeTaskModel.TaskStatus.RUNNING);
@@ -138,7 +141,7 @@ public class ScraperScheduler {
                 logger.warn("failed to save asin history for {}: {}", asinId, e.getMessage());
             }
         } catch (Exception ex) {
-            logger.error("scrape failed for asin {} (attempt {})", asinId, task.getRetryCount() + 1, ex);
+            logger.error("抓取失败 ASIN: {}, 重试次数: {}, 错误: {}", asinId, task.getRetryCount() + 1, ex.getMessage());
             task.setRetryCount(task.getRetryCount() + 1);
             
             // 如果重试次数达到上限，标记为失败；否则标记为待重试
