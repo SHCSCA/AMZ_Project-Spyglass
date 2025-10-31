@@ -19,8 +19,24 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * REST 控制器：Asin 管理（中文注释）
- * 提供 ASIN 的基本 CRUD 接口，供前端（AI 生成或手写）使用。
+ * ASIN商品管理REST控制器
+ * 
+ * 提供亚马逊产品ASIN的完整CRUD管理接口，支持：
+ * - 商品监控列表管理
+ * - 监控配置参数设置（库存阈值、价格变动等）
+ * - 监控状态控制（启用/禁用）
+ * 
+ * API端点说明：
+ * • GET    /api/asin         - 获取所有监控商品列表
+ * • POST   /api/asin         - 添加新的商品监控
+ * • DELETE /api/asin/{id}    - 删除指定商品监控
+ * • PUT    /api/asin/{id}/config - 更新监控配置（库存阈值、告警设置等）
+ * 
+ * 集成OpenAPI文档，支持前端代码自动生成
+ * 
+ * @author Spyglass Team
+ * @version 2.0.0
+ * @since 2024-12
  */
 @RestController
 @RequestMapping("/api/asin")
@@ -33,6 +49,17 @@ public class AsinController {
         this.asinRepository = asinRepository;
     }
 
+<<<<<<< HEAD
+=======
+    /**
+     * 获取所有监控中的ASIN商品列表
+     * 
+     * 返回当前系统中所有正在监控的亚马逊商品信息，
+     * 包括商品基本信息和监控配置参数
+     * 
+     * @return 监控商品列表（DTO格式）
+     */
+>>>>>>> appmod/java-upgrade-20251031070753
     @GetMapping
     @Operation(summary = "获取所有监控的 ASIN 列表", description = "返回一个包含所有已添加 ASIN 简要信息的列表。")
     @ApiResponse(responseCode = "200", description = "成功获取列表")
@@ -40,6 +67,20 @@ public class AsinController {
         return asinRepository.findAll().stream().map(this::toResponse).collect(Collectors.toList());
     }
 
+<<<<<<< HEAD
+=======
+    /**
+     * 添加新的ASIN商品监控
+     * 
+     * 创建新的商品监控项，支持配置：
+     * - 商品ASIN和站点信息
+     * - 自定义商品昵称
+     * - 库存告警阈值
+     * 
+     * @param req 新增商品监控请求参数（自动校验）
+     * @return 创建成功的商品监控信息
+     */
+>>>>>>> appmod/java-upgrade-20251031070753
     @PostMapping
     @Operation(summary = "添加一个新的 ASIN 进行监控", description = "根据传入的 ASIN、站点等信息，创建一个新的监控任务。")
     @ApiResponse(responseCode = "200", description = "ASIN 创建成功", content = @Content(schema = @Schema(implementation = AsinResponse.class)))
@@ -56,6 +97,18 @@ public class AsinController {
         return ResponseEntity.ok(toResponse(saved));
     }
 
+<<<<<<< HEAD
+=======
+    /**
+     * 删除指定的ASIN商品监控
+     * 
+     * 删除指定ID的商品监控项，停止对该商品的数据抓取和告警
+     * 注意：历史数据不会被删除，仅停止后续监控
+     * 
+     * @param id 商品监控记录ID
+     * @return HTTP 204 No Content
+     */
+>>>>>>> appmod/java-upgrade-20251031070753
     @DeleteMapping("/{id}")
     @Operation(summary = "删除一个 ASIN", description = "根据提供的主键 ID 删除一个 ASIN 及其相关的监控任务。")
     @ApiResponse(responseCode = "204", description = "删除成功")

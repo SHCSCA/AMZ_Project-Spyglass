@@ -1,0 +1,15 @@
+# IDE files
+.vscode/
+.idea/
+*.iml
+
+# Build outputs
+**/target/
+**/build/
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.local

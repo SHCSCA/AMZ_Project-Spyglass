@@ -15,8 +15,27 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
+<<<<<<< HEAD
  * Asin 历史快照接口（中文注释）
  * 提供按 ASIN 查询历史快照的只读接口，支持按时间范围筛选。
+=======
+ * ASIN商品历史数据控制器
+ * 
+ * 提供商品监控历史数据的查询接口，支持：
+ * - 按商品ID查询历史价格变化
+ * - 按商品ID查询历史BSR排名变化  
+ * - 按商品ID查询历史库存变化
+ * - 时间序列数据分析支持
+ * 
+ * API端点说明：
+ * • GET /api/asin/{id}/history - 获取指定商品的完整历史记录
+ * 
+ * 数据按抓取时间倒序排列，便于前端图表展示和趋势分析
+ * 
+ * @author Spyglass Team  
+ * @version 2.0.0
+ * @since 2024-12
+>>>>>>> appmod/java-upgrade-20251031070753
  */
 @RestController
 @RequestMapping("/api/asin")
@@ -29,6 +48,18 @@ public class AsinHistoryController {
         this.asinHistoryRepository = asinHistoryRepository;
     }
 
+    /**
+     * 获取指定商品的完整历史监控记录
+     * 
+     * 返回指定ASIN商品的所有历史快照数据，包括：
+     * - 价格变化历史（支持价格趋势图表）
+     * - BSR排名变化历史（支持排名趋势分析）
+     * - 库存变化历史（库存波动监控）
+     * - 评分和评论数变化
+     * 
+     * @param asinId 商品监控记录ID
+     * @return 历史记录列表（按时间倒序）
+     */
     @GetMapping("/{id}/history")
     @Operation(summary = "获取指定 ASIN 的历史数据", description = "根据 ASIN 的唯一 ID，查询其在特定时间范围内的历史抓取快照，按时间降序排列。")
     @ApiResponse(responseCode = "200", description = "成功获取历史数据")

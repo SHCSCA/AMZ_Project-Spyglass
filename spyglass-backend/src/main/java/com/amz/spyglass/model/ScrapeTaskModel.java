@@ -48,7 +48,7 @@ public class ScrapeTaskModel extends BaseEntityModel {
      * 任务状态，默认为等待执行
      */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 32)
     private TaskStatus status = TaskStatus.PENDING;
 
     /**

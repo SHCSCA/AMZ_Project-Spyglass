@@ -110,7 +110,7 @@ public class ImageDownloader {
             MessageDigest md = MessageDigest.getInstance("MD5");
             byte[] digest = md.digest(bytes);
             StringBuilder sb = new StringBuilder();
-            for (byte b : digest) sb.append(String.format("%02x", b));
+            for (byte b : digest) sb.append("%02x".formatted(b));
             return sb.toString();
         } catch (Exception e) {
             throw new RuntimeException(e);

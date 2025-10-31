@@ -28,6 +28,15 @@ public class AsinSnapshotDTO {
     // BSR 排名
     private Integer bsr;
 
+    // BSR大类名称
+    private String bsrCategory;
+
+    // BSR小类名称
+    private String bsrSubcategory;
+
+    // BSR小类排名
+    private Integer bsrSubcategoryRank;
+
     // 估算库存数量
     private Integer inventory;
 

@@ -22,10 +22,10 @@
     <description>Spyglass 后端服务：最小化骨架（包含中文注释）</description>
 
     <properties>
-        <java.version>17</java.version>
+        <java.version>21</java.version>
         <!-- 指定 Java 编译版本 -->
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
     </properties>
 
     <!-- 依赖说明：
@@ -94,7 +94,7 @@
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <version>1.18.30</version>
+            <version>1.18.42</version>
             <scope>provided</scope>
         </dependency>
 
