@@ -26,7 +26,7 @@ public class ScrapeParserTest {
                 + "</body></html>";
 
         Document doc = Jsoup.parse(html);
-        AsinSnapshot s = ScrapeParser.parse(doc);
+        AsinSnapshotDTO s = ScrapeParser.parse(doc);
 
         assertEquals("Test Product", s.getTitle());
         assertNotNull(s.getPrice());
