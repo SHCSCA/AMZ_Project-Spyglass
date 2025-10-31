@@ -87,19 +87,33 @@ public class ScraperService {
             }
         }
         
-        // 第三步：如果库存信息缺失，使用Selenium补充
-        if (snap.getInventory() == null || snap.getInventory() <= 0) {
-            log.debug("🔄 库存信息缺失，尝试Selenium补充抓取...");
+        // 第三步：使用 Selenium 对关键缺失字段进行补全（不止库存）
+        boolean needAnySupplement = snap.getPrice() == null || snap.getBsr() == null ||
+                snap.getInventory() == null || snap.getTotalReviews() == null ||
+                snap.getAvgRating() == null || snap.getBulletPoints() == null ||
+                snap.getImageMd5() == null || snap.getAplusMd5() == null;
+
+        if (needAnySupplement) {
+            log.debug("🔄 发现关键字段缺失，尝试 Selenium 补全... (price? {} bsr? {} inv? {} reviews? {} rating? {} bullets? {} imgMd5? {} aplusMd5? {})",
+                    snap.getPrice() == null, snap.getBsr() == null, snap.getInventory() == null,
+                    snap.getTotalReviews() == null, snap.getAvgRating() == null, snap.getBulletPoints() == null,
+                    snap.getImageMd5() == null, snap.getAplusMd5() == null);
             try {
                 com.amz.spyglass.scraper.AsinSnapshotDTO seleniumSnap = seleniumScraper.fetchSnapshot(url);
-                if (seleniumSnap.getInventory() != null && seleniumSnap.getInventory() > 0) {
-                    snap.setInventory(seleniumSnap.getInventory());
-                    log.info("✅ Selenium成功补充库存信息: {}", snap.getInventory());
-                } else {
-                    log.warn("⚠️ Selenium也未能获取库存信息");
-                }
+                if (snap.getPrice() == null && seleniumSnap.getPrice() != null) snap.setPrice(seleniumSnap.getPrice());
+                if (snap.getBsr() == null && seleniumSnap.getBsr() != null) snap.setBsr(seleniumSnap.getBsr());
+                if (snap.getInventory() == null && seleniumSnap.getInventory() != null) snap.setInventory(seleniumSnap.getInventory());
+                if (snap.getTotalReviews() == null && seleniumSnap.getTotalReviews() != null) snap.setTotalReviews(seleniumSnap.getTotalReviews());
+                if (snap.getAvgRating() == null && seleniumSnap.getAvgRating() != null) snap.setAvgRating(seleniumSnap.getAvgRating());
+                if (snap.getBulletPoints() == null && seleniumSnap.getBulletPoints() != null) snap.setBulletPoints(seleniumSnap.getBulletPoints());
+                if (snap.getImageMd5() == null && seleniumSnap.getImageMd5() != null) snap.setImageMd5(seleniumSnap.getImageMd5());
+                if (snap.getAplusMd5() == null && seleniumSnap.getAplusMd5() != null) snap.setAplusMd5(seleniumSnap.getAplusMd5());
+                log.info("✅ Selenium 补全完成 -> price={} bsr={} inv={} reviews={} rating={} bullets={} imgMd5={} aplusMd5={}",
+                        snap.getPrice(), snap.getBsr(), snap.getInventory(), snap.getTotalReviews(),
+                        snap.getAvgRating(), snap.getBulletPoints() != null ? "Y" : "N",
+                        snap.getImageMd5() != null ? "Y" : "N", snap.getAplusMd5() != null ? "Y" : "N");
             } catch (Exception e) {
-                log.warn("⚠️ Selenium补充抓取失败: {}", e.getMessage());
+                log.warn("⚠️ Selenium补全失败: {}", e.getMessage());
             }
         }
         

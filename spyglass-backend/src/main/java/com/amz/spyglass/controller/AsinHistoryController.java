@@ -15,27 +15,22 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
-<<<<<<< HEAD
- * Asin 历史快照接口（中文注释）
- * 提供按 ASIN 查询历史快照的只读接口，支持按时间范围筛选。
-=======
- * ASIN商品历史数据控制器
+ * ASIN 商品历史数据控制器
  * 
  * 提供商品监控历史数据的查询接口，支持：
- * - 按商品ID查询历史价格变化
- * - 按商品ID查询历史BSR排名变化  
- * - 按商品ID查询历史库存变化
- * - 时间序列数据分析支持
+ * - 按商品 ID 查询历史价格变化
+ * - 按商品 ID 查询历史 BSR 排名变化
+ * - 按商品 ID 查询历史库存变化
+ * - 时间序列数据分析支持（供前端折线图使用）
  * 
- * API端点说明：
- * • GET /api/asin/{id}/history - 获取指定商品的完整历史记录
+ * API 端点说明：
+ * - GET /api/asin/{id}/history 获取指定商品的完整历史记录
  * 
- * 数据按抓取时间倒序排列，便于前端图表展示和趋势分析
+ * 数据按抓取时间倒序排列，便于前端图表展示和趋势分析。
  * 
- * @author Spyglass Team  
+ * @author Spyglass Team
  * @version 2.0.0
  * @since 2024-12
->>>>>>> appmod/java-upgrade-20251031070753
  */
 @RestController
 @RequestMapping("/api/asin")
@@ -102,6 +97,8 @@ public class AsinHistoryController {
         r.setInventory(h.getInventory());
         r.setImageMd5(h.getImageMd5());
         r.setAplusMd5(h.getAplusMd5());
+        r.setTotalReviews(h.getTotalReviews());
+        r.setAvgRating(h.getAvgRating());
         r.setSnapshotAt(h.getSnapshotAt());
         return r;
     }

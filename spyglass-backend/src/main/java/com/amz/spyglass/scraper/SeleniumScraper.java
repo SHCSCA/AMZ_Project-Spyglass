@@ -6,6 +6,10 @@ import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.springframework.stereotype.Component;
+import lombok.extern.slf4j.Slf4j;
+
+import java.net.InetSocketAddress;
+import java.net.Proxy;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -16,13 +20,45 @@ import java.util.Locale;
  * Selenium 抓取器（用于处理 JS 渲染的页面，如库存 / 动态加载价格 / 评价等）。
  * 说明：用于补充 Jsoup 静态抓取无法获取或为空的字段。
  */
+@Slf4j
 @Component
 public class SeleniumScraper implements Scraper {
+
+    private final ProxyManager proxyManager;
+
+    public SeleniumScraper(ProxyManager proxyManager) {
+        this.proxyManager = proxyManager;
+    }
 
     private ChromeOptions buildOptions() {
         ChromeOptions options = new ChromeOptions();
         options.addArguments("--headless=new", "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--window-size=1920,1080");
         options.setPageLoadStrategy(PageLoadStrategy.NORMAL);
+        // 注入代理（如果启用）
+        try {
+            com.amz.spyglass.config.ProxyConfig.ProxyProvider provider = proxyManager.nextProxy();
+            if (provider != null && provider.getUrl() != null && !provider.getUrl().isEmpty()) {
+                String[] parts = provider.getUrl().split(":");
+                String host;
+                int port;
+                if (parts.length == 2) {
+                    host = parts[0];
+                    port = Integer.parseInt(parts[1]);
+                } else if (parts.length >= 3) {
+                    host = parts[1].replace("//", "");
+                    port = Integer.parseInt(parts[2]);
+                } else {
+                    throw new IllegalArgumentException("Invalid proxy URL format: " + provider.getUrl());
+                }
+                // Selenium 使用 ChromeOptions 添加代理参数
+                options.addArguments("--proxy-server=" + host + ":" + port);
+                if (provider.getUsername() != null && provider.getPassword() != null) {
+                    log.warn("[Selenium] 当前使用的HTTP代理需要用户名密码，Chrome原生不直接支持Basic认证，需要在后续实现扩展(如使用Selenium扩展或启动后注入认证)。用户名={}", provider.getUsername());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[Selenium] 代理配置失败: {}", e.getMessage());
+        }
         return options;
     }
 

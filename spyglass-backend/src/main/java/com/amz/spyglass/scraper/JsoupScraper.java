@@ -1,8 +1,6 @@
 package com.amz.spyglass.scraper;
 
 import com.amz.spyglass.config.ScraperProperties;
-import com.amz.spyglass.scraper.ProxyManager;
-import java.util.Optional;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -25,11 +23,9 @@ public class JsoupScraper implements Scraper {
     private final Logger logger = LoggerFactory.getLogger(JsoupScraper.class);
     private final ProxyManager proxyManager;
     private final ScraperProperties scraperProperties;
-    private final com.amz.spyglass.scraper.ImageDownloader imageDownloader;
-    public JsoupScraper(ProxyManager proxyManager, ScraperProperties scraperProperties, com.amz.spyglass.scraper.ImageDownloader imageDownloader) {
+    public JsoupScraper(ProxyManager proxyManager, ScraperProperties scraperProperties) {
         this.proxyManager = proxyManager;
         this.scraperProperties = scraperProperties;
-        this.imageDownloader = imageDownloader;
     }
 
     @Override
@@ -132,18 +128,23 @@ public class JsoupScraper implements Scraper {
                 if (!criticalMissing) {
                     break; // 已有部分关键数据，不再重试
                 }
+                // 指数退避
+                long backoff = (long)Math.min(4000, 1000 * Math.pow(2, attempt - 1));
+                try { Thread.sleep(backoff); } catch (InterruptedException ignored) {}
             } catch (Exception ex) {
                 lastEx = ex;
                 logger.warn("[Jsoup] 抓取异常 attempt={} url={} msg={}", attempt, url, ex.getMessage());
                 if (attempt == scraperProperties.getMaxRetry()) throw ex; // 最后一次抛出
                 // 继续重试
+                long backoff = (long)Math.min(4000, 1000 * Math.pow(2, attempt - 1));
+                try { Thread.sleep(backoff); } catch (InterruptedException ignored) {}
             }
         }
 
         if (snapshot == null) throw lastEx != null ? lastEx : new IllegalStateException("抓取失败且无异常信息 url=" + url);
 
-        logger.info("[Jsoup] 抓取完成 summary: title='{}' price={} bsr={} inventory={} reviews={} rating={} imageMd5={} aplusMd5={} cost={}ms",
-                truncate(snapshot.getTitle(),60), snapshot.getPrice(), snapshot.getBsr(), snapshot.getInventory(), snapshot.getTotalReviews(), snapshot.getAvgRating(), snapshot.getImageMd5(), snapshot.getAplusMd5(), (System.currentTimeMillis()-startMs));
+    logger.info("[Jsoup] 抓取完成 summary: title='{}' price={} bsr={} reviews={} rating={} cost={}ms",
+        truncate(snapshot.getTitle(),60), snapshot.getPrice(), snapshot.getBsr(), snapshot.getTotalReviews(), snapshot.getAvgRating(), (System.currentTimeMillis()-startMs));
         return snapshot;
     }
 

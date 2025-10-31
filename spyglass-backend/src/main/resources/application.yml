@@ -34,9 +34,9 @@ scraper:
     providers:
       - name: novproxy
         type: RESIDENTIAL
-        url: ${PROXY_URL:}
-        username: ${PROXY_USER:}
-        password: ${PROXY_PASS:}
+        url: us.novproxy.io:1000
+        username: sehx5222-region-US
+        password: ygazcakb
   htmlDumpEnabled: true
   htmlDumpDir: logs/html-dump
   randomDelayMinMs: 150
