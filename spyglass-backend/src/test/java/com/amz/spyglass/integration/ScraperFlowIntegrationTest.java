@@ -27,7 +27,8 @@ public class ScraperFlowIntegrationTest {
         jsoup = Mockito.mock(com.amz.spyglass.scraper.JsoupScraper.class);
         selenium = Mockito.mock(com.amz.spyglass.scraper.SeleniumScraper.class);
         alertService = Mockito.mock(AlertService.class);
-        scraperService = new ScraperService(jsoup, selenium, alertService);
+        com.amz.spyglass.scraper.HttpClientScraper httpClient = Mockito.mock(com.amz.spyglass.scraper.HttpClientScraper.class);
+        scraperService = new ScraperService(jsoup, selenium, httpClient);
     }
 
     @Test

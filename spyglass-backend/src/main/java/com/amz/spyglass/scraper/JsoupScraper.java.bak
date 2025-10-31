@@ -11,8 +11,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.net.Authenticator;
-import java.net.PasswordAuthentication;
 
 /**
  * Jsoup 实现的 Scraper（中文注释）
@@ -102,6 +100,7 @@ public class JsoupScraper implements Scraper {
             logger.debug("[Jsoup] 随机延迟 {} ms 后开始抓取 url={}", delay, url);
         } catch (InterruptedException ignored) {}
 
+<<<<<<< HEAD
         AsinSnapshotDTO snapshot = null;
         Exception lastEx = null;
         for (int attempt = 1; attempt <= scraperProperties.getMaxRetry(); attempt++) {
@@ -116,8 +115,7 @@ public class JsoupScraper implements Scraper {
                         .header("Pragma", "no-cache")
                         .header("Connection", "keep-alive")
                         .header("Upgrade-Insecure-Requests", "1");
-                        
-                // 使用 ProxyManager 获取代理并应用
+                // 代理
                 applyProxy(conn);
                 Document doc = conn.get();
                 snapshot = ScrapeParser.parse(doc);
@@ -148,11 +146,22 @@ public class JsoupScraper implements Scraper {
     }
 
     private void applyProxy(Connection conn) {
+=======
+        // 使用 ProxyManager 获取代理并应用
+>>>>>>> appmod/java-upgrade-20251031070753
         try {
             com.amz.spyglass.config.ProxyConfig.ProxyProvider provider = proxyManager.nextProxy();
             if (provider != null) {
                 String proxyUrl = provider.getUrl();
                 if (proxyUrl != null && !proxyUrl.isEmpty()) {
+<<<<<<< HEAD
+                    String[] parts = proxyUrl.split(":" );
+                    if (parts.length >= 3) {
+                        String host = parts[1].replace("//", "");
+                        int port = Integer.parseInt(parts[2]);
+                        conn.proxy(host, port);
+                        logger.debug("[Jsoup] 使用代理 host={} port={}", host, port);
+=======
                     String[] parts = proxyUrl.split(":");
                     String host;
                     int port;
@@ -190,6 +199,7 @@ public class JsoupScraper implements Scraper {
                                 }
                             });
                         }
+>>>>>>> appmod/java-upgrade-20251031070753
                     }
                 }
             }

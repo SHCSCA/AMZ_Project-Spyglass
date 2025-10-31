@@ -49,8 +49,6 @@ public class AsinController {
         this.asinRepository = asinRepository;
     }
 
-<<<<<<< HEAD
-=======
     /**
      * 获取所有监控中的ASIN商品列表
      * 
@@ -59,7 +57,6 @@ public class AsinController {
      * 
      * @return 监控商品列表（DTO格式）
      */
->>>>>>> appmod/java-upgrade-20251031070753
     @GetMapping
     @Operation(summary = "获取所有监控的 ASIN 列表", description = "返回一个包含所有已添加 ASIN 简要信息的列表。")
     @ApiResponse(responseCode = "200", description = "成功获取列表")
@@ -67,8 +64,6 @@ public class AsinController {
         return asinRepository.findAll().stream().map(this::toResponse).collect(Collectors.toList());
     }
 
-<<<<<<< HEAD
-=======
     /**
      * 添加新的ASIN商品监控
      * 
@@ -80,7 +75,6 @@ public class AsinController {
      * @param req 新增商品监控请求参数（自动校验）
      * @return 创建成功的商品监控信息
      */
->>>>>>> appmod/java-upgrade-20251031070753
     @PostMapping
     @Operation(summary = "添加一个新的 ASIN 进行监控", description = "根据传入的 ASIN、站点等信息，创建一个新的监控任务。")
     @ApiResponse(responseCode = "200", description = "ASIN 创建成功", content = @Content(schema = @Schema(implementation = AsinResponse.class)))
@@ -97,8 +91,6 @@ public class AsinController {
         return ResponseEntity.ok(toResponse(saved));
     }
 
-<<<<<<< HEAD
-=======
     /**
      * 删除指定的ASIN商品监控
      * 
@@ -108,7 +100,6 @@ public class AsinController {
      * @param id 商品监控记录ID
      * @return HTTP 204 No Content
      */
->>>>>>> appmod/java-upgrade-20251031070753
     @DeleteMapping("/{id}")
     @Operation(summary = "删除一个 ASIN", description = "根据提供的主键 ID 删除一个 ASIN 及其相关的监控任务。")
     @ApiResponse(responseCode = "204", description = "删除成功")
