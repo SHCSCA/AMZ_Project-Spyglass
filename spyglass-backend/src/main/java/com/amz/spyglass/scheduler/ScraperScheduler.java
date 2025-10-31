@@ -142,15 +142,23 @@ public class ScraperScheduler {
         }
     )
     public void runForAsinAsync(Long asinId) throws Exception {
-        // 计算当前的“已重试次数”用于日志输出（读取最近一条任务记录）
-        int previousRetries = Optional.ofNullable(scrapeTaskRepository.findFirstByAsinIdOrderByCreatedAtDesc(asinId))
-            .map(ScrapeTaskModel::getRetryCount)
-            .orElse(0);
-        logger.info("[Task] 开始抓取 ASIN_ID={} (历史重试次数={})", asinId, previousRetries);
-
-        // 初始化任务记录
-        ScrapeTaskModel task = new ScrapeTaskModel();
-        task.setAsinId(asinId);
+        // 查找或创建任务记录（避免重试时重复创建）
+        ScrapeTaskModel task = scrapeTaskRepository.findFirstByAsinIdOrderByCreatedAtDesc(asinId);
+        int previousRetries = 0;
+        
+        if (task != null && (task.getStatus() == ScrapeTaskModel.TaskStatus.PENDING || 
+                             task.getStatus() == ScrapeTaskModel.TaskStatus.RUNNING)) {
+            // 复用现有的待重试或运行中的任务记录
+            previousRetries = task.getRetryCount();
+            logger.info("[Task] 复用现有任务记录 ASIN_ID={} TaskID={} (重试次数={})", asinId, task.getId(), previousRetries);
+        } else {
+            // 创建新任务记录
+            task = new ScrapeTaskModel();
+            task.setAsinId(asinId);
+            previousRetries = 0;
+            logger.info("[Task] 创建新任务记录 ASIN_ID={}", asinId);
+        }
+        
         task.setStatus(ScrapeTaskModel.TaskStatus.RUNNING);
         task.setRunAt(Instant.now());
         scrapeTaskRepository.save(task);
