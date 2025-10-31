@@ -49,8 +49,20 @@ public class ProxyManager {
         // 解析代理 URL 并配置
         String proxyUrl = provider.getUrl();
         String[] parts = proxyUrl.split(":");
-        String host = parts[1].replace("//", "");
-        int port = Integer.parseInt(parts[2]);
+        String host;
+        int port;
+        
+        if (parts.length == 2) {
+            // 格式: host:port
+            host = parts[0];
+            port = Integer.parseInt(parts[1]);
+        } else if (parts.length >= 3) {
+            // 格式: protocol://host:port
+            host = parts[1].replace("//", "");
+            port = Integer.parseInt(parts[2]);
+        } else {
+            throw new IllegalArgumentException("Invalid proxy URL format: " + proxyUrl);
+        }
         
         Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(host, port));
         factory.setProxy(proxy);

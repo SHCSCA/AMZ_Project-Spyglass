@@ -36,7 +36,7 @@ public class JsoupScraper implements Scraper {
                 .timeout((int) Duration.ofSeconds(20).toMillis())
                 .followRedirects(true);
 
-        // 如果配置了代理，则从 ProxyManager 获取下一个代理并应用到请求（线程安全的请求级代理认证）
+        // 如果配置了代理，则从 ProxyManager 获取下一个代理并应用到请求
         try {
             com.amz.spyglass.config.ProxyConfig.ProxyProvider provider = proxyManager.nextProxy();
             if (provider != null) {
@@ -44,18 +44,41 @@ public class JsoupScraper implements Scraper {
                 String proxyUrl = provider.getUrl();
                 if (proxyUrl != null && !proxyUrl.isEmpty()) {
                     String[] parts = proxyUrl.split(":");
-                    if (parts.length >= 3) {
-                        String host = parts[1].replace("//", "");
-                        int port = Integer.parseInt(parts[2]);
-                        conn.proxy(host, port);
+                    String host;
+                    int port;
+                    
+                    if (parts.length == 2) {
+                        // 格式: host:port
+                        host = parts[0];
+                        port = Integer.parseInt(parts[1]);
+                    } else if (parts.length >= 3) {
+                        // 格式: protocol://host:port
+                        host = parts[1].replace("//", "");
+                        port = Integer.parseInt(parts[2]);
+                    } else {
+                        throw new IllegalArgumentException("Invalid proxy URL format: " + proxyUrl);
                     }
-                }
-
-                // 如果有认证，添加请求级 Proxy-Authorization 头（Base64）
-                if (provider.getUsername() != null && provider.getPassword() != null) {
-                    String auth = provider.getUsername() + ":" + provider.getPassword();
-                    String encoded = java.util.Base64.getEncoder().encodeToString(auth.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                    conn.header("Proxy-Authorization", "Basic " + encoded);
+                    
+                    conn.proxy(host, port);
+                    
+                    // 对于需要认证的代理，使用系统级认证器
+                    if (provider.getUsername() != null && provider.getPassword() != null) {
+                        System.setProperty("http.proxyUser", provider.getUsername());
+                        System.setProperty("http.proxyPassword", provider.getPassword());
+                        System.setProperty("https.proxyUser", provider.getUsername());
+                        System.setProperty("https.proxyPassword", provider.getPassword());
+                        
+                        // 设置认证器
+                        Authenticator.setDefault(new Authenticator() {
+                            @Override
+                            protected PasswordAuthentication getPasswordAuthentication() {
+                                return new PasswordAuthentication(
+                                    provider.getUsername(), 
+                                    provider.getPassword().toCharArray()
+                                );
+                            }
+                        });
+                    }
                 }
             }
         } catch (Exception ignored) {}
@@ -71,23 +94,50 @@ public class JsoupScraper implements Scraper {
                 .timeout((int) Duration.ofSeconds(20).toMillis())
                 .followRedirects(true);
 
-        // 使用 ProxyManager 获取请求级代理并应用（不使用 JVM 全局 Authenticator）
+        // 使用 ProxyManager 获取代理并应用
         try {
             com.amz.spyglass.config.ProxyConfig.ProxyProvider provider = proxyManager.nextProxy();
             if (provider != null) {
                 String proxyUrl = provider.getUrl();
                 if (proxyUrl != null && !proxyUrl.isEmpty()) {
-                    String[] parts = proxyUrl.split(":" );
-                    if (parts.length >= 3) {
-                        String host = parts[1].replace("//", "");
-                        int port = Integer.parseInt(parts[2]);
-                        conn.proxy(host, port);
+                    String[] parts = proxyUrl.split(":");
+                    String host;
+                    int port;
+                    
+                    if (parts.length == 2) {
+                        // 格式: host:port
+                        host = parts[0];
+                        port = Integer.parseInt(parts[1]);
+                    } else if (parts.length >= 3) {
+                        // 格式: protocol://host:port
+                        host = parts[1].replace("//", "");
+                        port = Integer.parseInt(parts[2]);
+                    } else {
+                        throw new IllegalArgumentException("Invalid proxy URL format: " + proxyUrl);
                     }
-                }
-                if (provider.getUsername() != null && provider.getPassword() != null) {
-                    String auth = provider.getUsername() + ":" + provider.getPassword();
-                    String encoded = java.util.Base64.getEncoder().encodeToString(auth.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                    conn.header("Proxy-Authorization", "Basic " + encoded);
+                    
+                    conn.proxy(host, port);
+                    
+                    // 对于需要认证的代理，使用系统级认证器
+                    if (provider.getUsername() != null && provider.getPassword() != null) {
+                        System.setProperty("http.proxyUser", provider.getUsername());
+                        System.setProperty("http.proxyPassword", provider.getPassword());
+                        System.setProperty("https.proxyUser", provider.getUsername());
+                        System.setProperty("https.proxyPassword", provider.getPassword());
+                        
+                        // 设置认证器（如果尚未设置）
+                        if (Authenticator.getDefault() == null) {
+                            Authenticator.setDefault(new Authenticator() {
+                                @Override
+                                protected PasswordAuthentication getPasswordAuthentication() {
+                                    return new PasswordAuthentication(
+                                        provider.getUsername(), 
+                                        provider.getPassword().toCharArray()
+                                    );
+                                }
+                            });
+                        }
+                    }
                 }
             }
         } catch (Exception ignored) {}
