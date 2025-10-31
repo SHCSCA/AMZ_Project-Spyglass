@@ -54,6 +54,23 @@ public class AsinHistoryModel extends BaseEntityModel {
     private Integer bsr;
 
     /**
+     * BSR大类名称
+     */
+    @Column(length = 255)
+    private String bsrCategory;
+
+    /**
+     * BSR小类名称
+     */
+    @Column(length = 255)
+    private String bsrSubcategory;
+
+    /**
+     * BSR小类排名
+     */
+    private Integer bsrSubcategoryRank;
+
+    /**
      * 预估库存数量
      */
     private Integer inventory;

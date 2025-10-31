@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Objects;
 
@@ -32,7 +33,7 @@ public class AlertService {
     public void processAlerts(AsinModel asin, AsinSnapshotDTO newSnap) {
         // 获取最近一条历史记录
         List<AsinHistoryModel> rows = historyRepository.findByAsinIdOrderBySnapshotAtDesc(asin.getId());
-        AsinHistoryModel last = rows.isEmpty() ? null : rows.get(0);
+        AsinHistoryModel last = rows.isEmpty() ? null : rows.getFirst();
 
         // 价格变动
         BigDecimal oldPrice = last == null ? null : last.getPrice();
@@ -42,7 +43,7 @@ public class AlertService {
             try {
                 jdbcTemplate.update("INSERT INTO price_alert (asin_id, old_price, new_price, change_percent, alert_at, created_at) VALUES (?, ?, ?, ?, NOW(), NOW())",
                         asin.getId(), oldPrice, newPrice,
-                        oldPrice.doubleValue() == 0.0 ? 0.0 : (newPrice.subtract(oldPrice).divide(oldPrice, 4, BigDecimal.ROUND_HALF_UP).doubleValue() * 100)
+                        oldPrice.doubleValue() == 0.0 ? 0.0 : (newPrice.subtract(oldPrice).divide(oldPrice, 4, RoundingMode.HALF_UP).doubleValue() * 100)
                 );
             } catch (Exception ignored) {}
 
@@ -94,5 +95,9 @@ public class AlertService {
                 dingTalkPusher.pushText("主图变更: " + asin.getAsin(), "旧主图MD5: " + (oldImg == null ? "" : oldImg) + "\n新主图MD5: " + (newImg == null ? "" : newImg));
             }
         }
+    }
+
+    public void compareAndAlert(AsinModel asin, AsinSnapshotDTO newSnap) {
+        processAlerts(asin, newSnap);
     }
 }

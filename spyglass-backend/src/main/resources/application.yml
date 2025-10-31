@@ -32,8 +32,19 @@ scraper:
   proxy:
     enabled: true
     providers:
-      - name: brightdata
+      - name: novproxy
         type: RESIDENTIAL
+<<<<<<< HEAD
         url: ${PROXY_URL:}
         username: ${PROXY_USER:}
         password: ${PROXY_PASS:}
+  htmlDumpEnabled: true
+  htmlDumpDir: logs/html-dump
+  randomDelayMinMs: 150
+  randomDelayMaxMs: 450
+  maxRetry: 3
+=======
+        url: us.novproxy.io:1000
+        username: sehx5222-region-US
+        password: ygazcakb
+>>>>>>> appmod/java-upgrade-20251031070753
