@@ -222,7 +222,7 @@ public class SeleniumScraper implements Scraper {
             java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
             byte[] bytes = md.digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             StringBuilder sb = new StringBuilder();
-            for (byte b : bytes) sb.append(String.format("%02x", b));
+            for (byte b : bytes) sb.append("%02x".formatted(b));
             return sb.toString();
         } catch (Exception e) { return null; }
     }

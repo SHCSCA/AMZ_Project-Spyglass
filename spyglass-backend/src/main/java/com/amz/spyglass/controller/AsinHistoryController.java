@@ -62,7 +62,7 @@ public class AsinHistoryController {
     public List<AsinHistoryResponse> history(
             @Parameter(description = "要查询的 ASIN 的唯一 ID", required = true, example = "1") @PathVariable("id") Long asinId,
             @Parameter(description = "查询的时间范围，例如 '7d' (7天), '30d' (30天), '3m' (3个月)。默认为 30 天。", example = "30d")
-            @RequestParam(value = "range", defaultValue = "30d") String range) {
+            @RequestParam(defaultValue = "30d") String range) {
 
         Instant since = parseRange(range);
         List<AsinHistoryModel> rows = asinHistoryRepository.findByAsinIdAndSnapshotAtAfterOrderBySnapshotAtDesc(asinId, since);

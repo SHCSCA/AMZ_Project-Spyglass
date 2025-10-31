@@ -87,7 +87,7 @@ public class ScraperService {
             }
         }
         
-        // 第三步：使用 Selenium 对关键缺失字段进行补全（不止库存）
+        // 第三步：使用 Selenium 对关键缺失字段进行补全（仅补全缺失字段，避免重复）
         boolean needAnySupplement = snap.getPrice() == null || snap.getBsr() == null ||
                 snap.getInventory() == null || snap.getTotalReviews() == null ||
                 snap.getAvgRating() == null || snap.getBulletPoints() == null ||
@@ -100,6 +100,8 @@ public class ScraperService {
                     snap.getImageMd5() == null, snap.getAplusMd5() == null);
             try {
                 com.amz.spyglass.scraper.AsinSnapshotDTO seleniumSnap = seleniumScraper.fetchSnapshot(url);
+                
+                // 仅补全缺失的字段（避免覆盖已有数据）
                 if (snap.getPrice() == null && seleniumSnap.getPrice() != null) snap.setPrice(seleniumSnap.getPrice());
                 if (snap.getBsr() == null && seleniumSnap.getBsr() != null) snap.setBsr(seleniumSnap.getBsr());
                 if (snap.getInventory() == null && seleniumSnap.getInventory() != null) snap.setInventory(seleniumSnap.getInventory());
@@ -108,9 +110,16 @@ public class ScraperService {
                 if (snap.getBulletPoints() == null && seleniumSnap.getBulletPoints() != null) snap.setBulletPoints(seleniumSnap.getBulletPoints());
                 if (snap.getImageMd5() == null && seleniumSnap.getImageMd5() != null) snap.setImageMd5(seleniumSnap.getImageMd5());
                 if (snap.getAplusMd5() == null && seleniumSnap.getAplusMd5() != null) snap.setAplusMd5(seleniumSnap.getAplusMd5());
-                log.info("✅ Selenium 补全完成 -> price={} bsr={} inv={} reviews={} rating={} bullets={} imgMd5={} aplusMd5={}",
-                        snap.getPrice(), snap.getBsr(), snap.getInventory(), snap.getTotalReviews(),
-                        snap.getAvgRating(), snap.getBulletPoints() != null ? "Y" : "N",
+                
+                // 补全BSR分类字段（如果HttpClient/Jsoup没抓到）
+                if (snap.getBsrCategory() == null && seleniumSnap.getBsrCategory() != null) snap.setBsrCategory(seleniumSnap.getBsrCategory());
+                if (snap.getBsrSubcategory() == null && seleniumSnap.getBsrSubcategory() != null) snap.setBsrSubcategory(seleniumSnap.getBsrSubcategory());
+                if (snap.getBsrSubcategoryRank() == null && seleniumSnap.getBsrSubcategoryRank() != null) snap.setBsrSubcategoryRank(seleniumSnap.getBsrSubcategoryRank());
+                
+                log.info("✅ Selenium 补全完成 -> price={} bsr={} bsrCat={} bsrSub={} bsrSubRank={} inv={} reviews={} rating={} bullets={} imgMd5={} aplusMd5={}",
+                        snap.getPrice(), snap.getBsr(), snap.getBsrCategory(), snap.getBsrSubcategory(), snap.getBsrSubcategoryRank(),
+                        snap.getInventory(), snap.getTotalReviews(), snap.getAvgRating(), 
+                        snap.getBulletPoints() != null ? "Y" : "N",
                         snap.getImageMd5() != null ? "Y" : "N", snap.getAplusMd5() != null ? "Y" : "N");
             } catch (Exception e) {
                 log.warn("⚠️ Selenium补全失败: {}", e.getMessage());
