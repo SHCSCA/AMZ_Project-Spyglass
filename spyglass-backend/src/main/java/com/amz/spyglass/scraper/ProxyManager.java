@@ -2,7 +2,6 @@ package com.amz.spyglass.scraper;
 
 import com.amz.spyglass.config.ProxyConfig;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
@@ -22,7 +21,6 @@ public class ProxyManager {
     private final List<ProxyConfig.ProxyProvider> providers;
     private final AtomicInteger currentIndex = new AtomicInteger(0);
     
-    @Autowired
     public ProxyManager(ProxyConfig proxyConfig) {
         this.proxyConfig = proxyConfig;
         this.providers = proxyConfig.getProviders();

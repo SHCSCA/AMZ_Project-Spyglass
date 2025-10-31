@@ -39,7 +39,8 @@ public class ScraperServiceMergeTest {
         Mockito.when(selenium.fetchSnapshot("https://example.com"))
                 .thenReturn(seleniumDto);
 
-        ScraperService service = new ScraperService(jsoup, selenium, alertService);
+        com.amz.spyglass.scraper.HttpClientScraper httpClient = Mockito.mock(com.amz.spyglass.scraper.HttpClientScraper.class);
+        ScraperService service = new ScraperService(jsoup, selenium, httpClient);
         AsinSnapshotDTO merged = service.fetchSnapshot("https://example.com");
 
         assertEquals(new BigDecimal("19.99"), merged.getPrice());

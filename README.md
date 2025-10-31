@@ -130,6 +130,7 @@
 | **部署** | **NFR-D-001:** 整个应用（后端、**MySQL**数据库、Nginx）必须通过 `docker-compose.yml` **一键编排**。 |
 | | **NFR-D-002:** Nginx必须配置为反向代理：`your.domain.com/` 指向前端静态文件，`your.domain.com/api/` 指向Spring Boot后端。 |
 | **技术栈** | **NFR-T-001:** 数据库统一使用 **MySQL 8**，应用方言使用 `org.hibernate.dialect.MySQL8Dialect`，驱动使用 `mysql-connector-j`。 |
+| | **NFR-T-002:** 后端技术栈已升级至 **Java 21 LTS** + **Spring Boot 3.2.3**，支持现代化开发特性。 |
 
 ---
 
@@ -143,17 +144,54 @@
 * 已成功在**线上服务器**（美国）通过Docker Compose部署，并集成了**付费住宅代理**。
 * **(已解决)** 数据库技术栈统一为 **MySQL**。
 * **(已降级)** 登录认证 (F-MOD-1) 移至 V2.0。
+* **(🆕 V1.3 新增)** 后端已升级至 **Java 21 LTS** + **Spring Boot 3.2.3**，采用现代化三层抓取架构（HttpClient → Jsoup → Selenium）。
 
 ---
 
-## 6. 操作指南 (Operation Guide)
+## 6. 技术架构升级说明 (V1.3)
 
-### 6.1. 快速启动 (Docker)
+### 6.1. Java 21 + Spring Boot 3 升级亮点
+
+本版本（V1.3）完成了重大技术栈升级，主要改进包括：
+
+**🔥 核心升级**
+- **Java 运行时**: 从 Java 17 升级至 **Java 21 LTS**（2023年9月发布）
+- **Spring Boot**: 升级至 **3.2.3**，享受现代化框架特性
+- **编译目标**: Maven 配置已调整为 Java 21 源代码级别和字节码目标
+
+**⚡ 性能与开发体验提升**
+- **虚拟线程支持**: Java 21 Project Loom 特性，适用于高并发抓取场景
+- **现代语法特性**: Switch 表达式、Record 类型、Pattern Matching 等
+- **更好的GC**: ZGC 和 G1GC 在 Java 21 中进一步优化
+
+**🏗️ 智能抓取架构优化**
+- **三层抓取策略**: HttpClient（优先） → Jsoup（回退） → Selenium（补充）
+- **代理认证增强**: 改进的住宅代理支持，包括 HTTP 基础认证和系统级认证器
+- **容错机制**: 智能重试和异常处理，提高抓取成功率
+
+**🔒 安全性改进**
+- Spring Boot 3.x 安全性增强
+- 更严格的依赖管理和 CVE 修复
+- 环境变量注入的最佳实践
+
+### 6.2. 向后兼容性
+
+- ✅ **API 端点**: 所有 V1.0 API 保持完全兼容
+- ✅ **数据库结构**: 现有数据无需迁移
+- ✅ **配置文件**: `application.yml` 配置向后兼容
+- ✅ **Docker 部署**: 现有 `docker-compose.yml` 继续可用
+
+---
+
+## 7. 操作指南 (Operation Guide)
+
+### 7.1. 快速启动 (Docker)
 
 本项目通过 `docker-compose` 实现一键部署，集成了后端服务与数据库。这是推荐的生产和测试环境运行方式。
 
 **前提条件:**
 - 已安装 Docker 和 Docker Compose。
+- 系统运行环境需支持 **Java 21 LTS**（推荐 Docker 部署，已内置兼容运行时）。
 - （如果需要）根据项目根目录下的 `docker-compose.yml` 文件，配置好必要的环境变量（例如，在 `.env` 文件中）。
 
 **启动命令:**
@@ -164,21 +202,29 @@ docker compose up --build -d
 
 服务启动后，可以通过 `docker compose logs -f spyglass-backend` 查看后端实时日志。
 
-### 6.2. 本地开发 (IDE / 命令行)
+### 7.2. 本地开发 (IDE / 命令行)
 
 如果你希望在本地直接运行后端服务进行开发调试：
 
-1.  **配置数据库:** 确保本地已安装并运行 `MySQL`。在 `spyglass-backend/src/main/resources/application.yml` 中，修改 `spring.datasource` 部分，使其指向你的本地数据库实例。
-2.  **配置环境变量:** 在你的 IDE 运行配置中或操作系统中设置必要的环境变量，如 `DINGTALK_WEBHOOK`、代理服务器地址等。
-3.  **运行后端:**
+1.  **Java 环境要求:** 确保本地已安装 **Java 21 LTS** 或更高版本。推荐使用 SDKMAN! 进行Java版本管理：
+    ```bash
+    # 安装 SDKMAN! (如果尚未安装)
+    curl -s "https://get.sdkman.io" | bash
+    # 安装并使用 Java 21
+    sdk install java 21.0.9-oracle
+    sdk use java 21.0.9-oracle
+    ```
+2.  **配置数据库:** 确保本地已安装并运行 `MySQL 8`。在 `spyglass-backend/src/main/resources/application.yml` 中，修改 `spring.datasource` 部分，使其指向你的本地数据库实例。
+3.  **配置环境变量:** 在你的 IDE 运行配置中或操作系统中设置必要的环境变量，如 `DINGTALK_WEBHOOK`、代理服务器地址等。
+4.  **运行后端:**
     ```bash
     # 进入后端模块目录
     cd spyglass-backend
-    # 使用 Maven Wrapper 运行
+    # 使用 Maven Wrapper 运行（自动使用 Spring Boot 3.2.3）
     ./mvnw spring-boot:run
     ```
 
-### 6.3. API 接口文档
+### 7.3. API 接口文档
 
 系统启动后，无论使用哪种方式，都可以通过以下地址访问由 `springdoc-openapi` 自动生成的 API 文档：
 
@@ -190,7 +236,7 @@ docker compose up --build -d
 
 > **注意:** 如果你通过 Nginx 或其他反向代理访问，请将 `localhost:8080` 替换为你的实际访问域名和端口。
 
-### 6.4. 环境变量配置
+### 7.4. 环境变量配置
 
 所有敏感���息和环境特定配置都应通过环境变量注入，以遵循安全和十二要素应用（Twelve-Factor App）的最佳实践。
 
@@ -210,7 +256,7 @@ docker compose up --build -d
 
 > **提示:** 在使用 `docker-compose` 时，可以在项目根目录创建一个 `.env` 文件来存放这些变量，Docker Compose 会自动加载。
 
-### 6.5. 常用 API 端点 (V1.0)
+### 7.5. 常用 API 端点 (V1.0)
 
 以下是 V1.0 阶段的核心 API 端点，可用于前端开发或直接通过 Swagger UI 进行测试。
 

@@ -66,23 +66,6 @@ public class ScraperService {
      * @throws Exception 抓取异常
      */
     public com.amz.spyglass.scraper.AsinSnapshotDTO fetchSnapshot(String url) throws Exception {
-<<<<<<< HEAD
-        com.amz.spyglass.scraper.AsinSnapshotDTO snap = jsoupScraper.fetchSnapshot(url);
-        boolean needSelenium = snap.getPrice() == null || snap.getBsr() == null || snap.getInventory() == null
-                || snap.getTotalReviews() == null || snap.getAvgRating() == null || snap.getBulletPoints() == null;
-        if (needSelenium) {
-            try {
-                com.amz.spyglass.scraper.AsinSnapshotDTO s2 = seleniumScraper.fetchSnapshot(url);
-                if (snap.getPrice() == null && s2.getPrice() != null) snap.setPrice(s2.getPrice());
-                if (snap.getBsr() == null && s2.getBsr() != null) snap.setBsr(s2.getBsr());
-                if (snap.getInventory() == null && s2.getInventory() != null) snap.setInventory(s2.getInventory());
-                if (snap.getTotalReviews() == null && s2.getTotalReviews() != null) snap.setTotalReviews(s2.getTotalReviews());
-                if (snap.getAvgRating() == null && s2.getAvgRating() != null) snap.setAvgRating(s2.getAvgRating());
-                if (snap.getBulletPoints() == null && s2.getBulletPoints() != null) snap.setBulletPoints(s2.getBulletPoints());
-                if (snap.getImageMd5() == null && s2.getImageMd5() != null) snap.setImageMd5(s2.getImageMd5());
-                if (snap.getAplusMd5() == null && s2.getAplusMd5() != null) snap.setAplusMd5(s2.getAplusMd5());
-            } catch (Exception ignored) {}
-=======
         log.info("🎯 开始智能抓取产品数据: {}", url);
         com.amz.spyglass.scraper.AsinSnapshotDTO snap = null;
         
@@ -102,22 +85,44 @@ public class ScraperService {
                 log.error("❌ Jsoup也失败了: {}", e2.getMessage());
                 throw e2;
             }
->>>>>>> appmod/java-upgrade-20251031070753
         }
         
-        // 第三步：如果库存信息缺失，使用Selenium补充
-        if (snap.getInventory() == null || snap.getInventory() <= 0) {
-            log.debug("🔄 库存信息缺失，尝试Selenium补充抓取...");
+        // 第三步：使用 Selenium 对关键缺失字段进行补全（仅补全缺失字段，避免重复）
+        boolean needAnySupplement = snap.getPrice() == null || snap.getBsr() == null ||
+                snap.getInventory() == null || snap.getTotalReviews() == null ||
+                snap.getAvgRating() == null || snap.getBulletPoints() == null ||
+                snap.getImageMd5() == null || snap.getAplusMd5() == null;
+
+        if (needAnySupplement) {
+            log.debug("🔄 发现关键字段缺失，尝试 Selenium 补全... (price? {} bsr? {} inv? {} reviews? {} rating? {} bullets? {} imgMd5? {} aplusMd5? {})",
+                    snap.getPrice() == null, snap.getBsr() == null, snap.getInventory() == null,
+                    snap.getTotalReviews() == null, snap.getAvgRating() == null, snap.getBulletPoints() == null,
+                    snap.getImageMd5() == null, snap.getAplusMd5() == null);
             try {
                 com.amz.spyglass.scraper.AsinSnapshotDTO seleniumSnap = seleniumScraper.fetchSnapshot(url);
-                if (seleniumSnap.getInventory() != null && seleniumSnap.getInventory() > 0) {
-                    snap.setInventory(seleniumSnap.getInventory());
-                    log.info("✅ Selenium成功补充库存信息: {}", snap.getInventory());
-                } else {
-                    log.warn("⚠️ Selenium也未能获取库存信息");
-                }
+                
+                // 仅补全缺失的字段（避免覆盖已有数据）
+                if (snap.getPrice() == null && seleniumSnap.getPrice() != null) snap.setPrice(seleniumSnap.getPrice());
+                if (snap.getBsr() == null && seleniumSnap.getBsr() != null) snap.setBsr(seleniumSnap.getBsr());
+                if (snap.getInventory() == null && seleniumSnap.getInventory() != null) snap.setInventory(seleniumSnap.getInventory());
+                if (snap.getTotalReviews() == null && seleniumSnap.getTotalReviews() != null) snap.setTotalReviews(seleniumSnap.getTotalReviews());
+                if (snap.getAvgRating() == null && seleniumSnap.getAvgRating() != null) snap.setAvgRating(seleniumSnap.getAvgRating());
+                if (snap.getBulletPoints() == null && seleniumSnap.getBulletPoints() != null) snap.setBulletPoints(seleniumSnap.getBulletPoints());
+                if (snap.getImageMd5() == null && seleniumSnap.getImageMd5() != null) snap.setImageMd5(seleniumSnap.getImageMd5());
+                if (snap.getAplusMd5() == null && seleniumSnap.getAplusMd5() != null) snap.setAplusMd5(seleniumSnap.getAplusMd5());
+                
+                // 补全BSR分类字段（如果HttpClient/Jsoup没抓到）
+                if (snap.getBsrCategory() == null && seleniumSnap.getBsrCategory() != null) snap.setBsrCategory(seleniumSnap.getBsrCategory());
+                if (snap.getBsrSubcategory() == null && seleniumSnap.getBsrSubcategory() != null) snap.setBsrSubcategory(seleniumSnap.getBsrSubcategory());
+                if (snap.getBsrSubcategoryRank() == null && seleniumSnap.getBsrSubcategoryRank() != null) snap.setBsrSubcategoryRank(seleniumSnap.getBsrSubcategoryRank());
+                
+                log.info("✅ Selenium 补全完成 -> price={} bsr={} bsrCat={} bsrSub={} bsrSubRank={} inv={} reviews={} rating={} bullets={} imgMd5={} aplusMd5={}",
+                        snap.getPrice(), snap.getBsr(), snap.getBsrCategory(), snap.getBsrSubcategory(), snap.getBsrSubcategoryRank(),
+                        snap.getInventory(), snap.getTotalReviews(), snap.getAvgRating(), 
+                        snap.getBulletPoints() != null ? "Y" : "N",
+                        snap.getImageMd5() != null ? "Y" : "N", snap.getAplusMd5() != null ? "Y" : "N");
             } catch (Exception e) {
-                log.warn("⚠️ Selenium补充抓取失败: {}", e.getMessage());
+                log.warn("⚠️ Selenium补全失败: {}", e.getMessage());
             }
         }
         
