@@ -31,7 +31,7 @@ import java.time.Instant;
  * 注意：当前未包含“新旧快照对比并触发告警”的逻辑，可在成功保存后扩展。
  */
 @Component
-@Profile("!test") // 测试环境下不启用调度器，避免影响单元测试的确定性
+@Profile("!test && !mysqltest") // 在 test 与 mysqltest 集成测试 profile 下不加载，避免初始与定时调度干扰计数
 @EnableRetry // 启用 Spring Retry，配合 @Retryable 注解使用
 public class ScraperScheduler {
 
@@ -79,15 +79,11 @@ public class ScraperScheduler {
         long start = System.currentTimeMillis();
         logger.info("========================================");
         logger.info("[Scheduler] 开始批量调度抓取任务 (fixedDelay={}ms)...", getConfiguredDelay());
-        logger.info("========================================");
-        
         java.util.List<AsinModel> all = asinRepository.findAll();
         int totalCount = all.size();
         int submittedCount = 0;
         int failedCount = 0;
-        
         logger.info("[Scheduler] 准备调度 ASIN 总数: {}", totalCount);
-        
         for (AsinModel asin : all) {
             try {
                 logger.info("[Scheduler] 提交异步抓取任务 -> ASIN={}, Site={}, ID={}, Nickname={}", 
@@ -142,24 +138,16 @@ public class ScraperScheduler {
         }
     )
     public void runForAsinAsync(Long asinId) throws Exception {
-        // 查找或创建任务记录（避免重试时重复创建）
-        ScrapeTaskModel task = scrapeTaskRepository.findFirstByAsinIdOrderByCreatedAtDesc(asinId);
-        int previousRetries = 0;
-        
-        if (task != null && (task.getStatus() == ScrapeTaskModel.TaskStatus.PENDING || 
-                             task.getStatus() == ScrapeTaskModel.TaskStatus.RUNNING)) {
-            // 复用现有的待重试或运行中的任务记录
-            previousRetries = task.getRetryCount();
-            logger.info("[Task] 复用现有任务记录 ASIN_ID={} TaskID={} (重试次数={})", asinId, task.getId(), previousRetries);
-        } else {
-            // 创建新任务记录
-            task = new ScrapeTaskModel();
-            task.setAsinId(asinId);
-            previousRetries = 0;
-            logger.info("[Task] 创建新任务记录 ASIN_ID={}", asinId);
-        }
-        
-        task.setStatus(ScrapeTaskModel.TaskStatus.RUNNING);
+        // 计算当前的“已重试次数”用于日志输出（读取最近一条任务记录）
+        int previousRetries = Optional.ofNullable(scrapeTaskRepository.findFirstByAsinIdOrderByCreatedAtDesc(asinId))
+            .map(ScrapeTaskModel::getRetryCount)
+            .orElse(0);
+        logger.info("[Task] 开始抓取 ASIN_ID={} (历史重试次数={})", asinId, previousRetries);
+
+        // 初始化任务记录
+        ScrapeTaskModel task = new ScrapeTaskModel();
+        task.setAsinId(asinId);
+    task.setStatus(ScrapeTaskModel.TaskStatusConstants.RUNNING);
         task.setRunAt(Instant.now());
         scrapeTaskRepository.save(task);
 
@@ -176,7 +164,7 @@ public class ScraperScheduler {
                 asinModel.getAsin(), truncate(snap.getTitle(), 60), snap.getPrice(), snap.getBsr(), snap.getInventory(), snap.getImageMd5(), snap.getAplusMd5());
 
             // 标记任务成功
-            task.setStatus(ScrapeTaskModel.TaskStatus.SUCCESS);
+            task.setStatus(ScrapeTaskModel.TaskStatusConstants.SUCCESS);
             task.setMessage("title=" + (snap.getTitle() == null ? "" : truncate(snap.getTitle(), 80)));
             task.markFinished();
             scrapeTaskRepository.save(task);
@@ -185,20 +173,19 @@ public class ScraperScheduler {
             // 写入历史快照（失败不影响主任务成功，仅记录警告）
             persistHistorySnapshot(asinModel, snap);
             // 触发告警对比
-            try { alertService.compareAndAlert(asinModel, snap); } catch (Exception e) { logger.warn("[Task] 告警触发失败 ASIN_ID={} msg={}", asinId, e.getMessage()); }
+            try { alertService.processAlerts(asinModel, snap); } catch (Exception e) { logger.warn("[Task] 告警触发失败 ASIN_ID={} msg={}", asinId, e.getMessage()); }
 
-            // TODO: 可在此处添加“新旧快照对比 + 告警触发”逻辑，比如调用 AlertService.compareAndAlert(...)
         } catch (Exception ex) {
             // 发生异常，更新任务重试计数与状态
             logger.error("[Task] 抓取失败 ASIN_ID={} 当前尝试序号={} 错误信息={}", asinId, previousRetries + 1, ex.getMessage(), ex);
             task.setRetryCount(previousRetries + 1);
             // 达到最大次数 -> 失败；否则置为 PENDING 由 Spring Retry 再次调用（下次进入方法会新增 RUNNING 记录）
             if (task.getRetryCount() >= 3) {
-                task.setStatus(ScrapeTaskModel.TaskStatus.FAILED);
+                task.setStatus(ScrapeTaskModel.TaskStatusConstants.FAILED);
                 task.setMessage("最终失败: " + ex.getMessage());
                 logger.warn("[Task] ASIN_ID={} 达到最大重试次数 ({} 次) 标记为 FAILED", asinId, task.getRetryCount());
             } else {
-                task.setStatus(ScrapeTaskModel.TaskStatus.PENDING);
+                task.setStatus(ScrapeTaskModel.TaskStatusConstants.PENDING);
                 task.setMessage("等待重试 (attempt=" + task.getRetryCount() + "/3) cause=" + ex.getMessage());
                 logger.info("[Task] ASIN_ID={} 标记为 PENDING, 将由 Spring Retry 在 1 小时后重试", asinId);
             }
@@ -228,10 +215,18 @@ public class ScraperScheduler {
             h.setTitle(snap.getTitle());
             h.setPrice(snap.getPrice());
             h.setBsr(snap.getBsr());
+            h.setBsrCategory(snap.getBsrCategory());
+            h.setBsrSubcategory(snap.getBsrSubcategory());
+            h.setBsrSubcategoryRank(snap.getBsrSubcategoryRank());
+            h.setInventory(snap.getInventory());
             h.setImageMd5(snap.getImageMd5());
             h.setTotalReviews(snap.getTotalReviews());
             h.setAvgRating(snap.getAvgRating());
             h.setBulletPoints(snap.getBulletPoints());
+            h.setTotalReviews(snap.getTotalReviews());
+            h.setAvgRating(snap.getAvgRating());
+            // 新增：保存最新差评 MD5 用于后续告警对比
+            h.setLatestNegativeReviewMd5(snap.getLatestNegativeReviewMd5());
             h.setSnapshotAt(snap.getSnapshotAt() == null ? Instant.now() : snap.getSnapshotAt());
             
             // 可选字段（BSR 分类信息）

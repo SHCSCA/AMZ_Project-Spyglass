@@ -41,9 +41,29 @@ public class AsinHistoryResponse {
     private Integer bsr;
 
     /**
+     * BSR主分类
+     */
+    private String bsrCategory;
+
+    /**
+     * BSR子分类
+     */
+    private String bsrSubcategory;
+
+    /**
+     * BSR子分类排名
+     */
+    private Integer bsrSubcategoryRank;
+
+    /**
      * 预估库存数量
      */
     private Integer inventory;
+
+    /**
+     * 产品特点（bullet points）
+     */
+    private String bulletPoints;
 
     /**
      * 主图MD5哈希值，用于检测图片变化

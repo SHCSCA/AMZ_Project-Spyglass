@@ -20,15 +20,10 @@ public class ProxyConfig {
     @Data
     public static class ProxyProvider {
         private String name;
-        private ProxyType type;
+        private String type; // 原枚举改为字符串
         private String url;
         private String username;
         private String password;
         private boolean active = true;
-    }
-    
-    public enum ProxyType {
-        RESIDENTIAL,    // 住宅代理（高质量）
-        DATACENTER     // 数据中心代理（备用）
     }
 }

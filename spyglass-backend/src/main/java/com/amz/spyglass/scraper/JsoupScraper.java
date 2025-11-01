@@ -117,7 +117,7 @@ public class JsoupScraper implements Scraper {
                 // 使用 ProxyManager 获取代理并应用
                 applyProxy(conn);
                 Document doc = conn.get();
-                snapshot = ScrapeParser.parse(doc);
+                snapshot = ScrapeParser.parse(doc.html(), url);
                 snapshot.setSnapshotAt(java.time.Instant.now());
 
                 boolean antiBot = isAntiBotPage(doc);
@@ -171,27 +171,29 @@ public class JsoupScraper implements Scraper {
                         throw new IllegalArgumentException("Invalid proxy URL format: " + proxyUrl);
                     }
                     
+                    // 始终调用 conn.proxy() 设置代理
                     conn.proxy(host, port);
                     
-                    // 对于需要认证的代理，使用系统级认证器
+                    // 对于需要认证的代理，设置系统属性和 Authenticator
                     if (provider.getUsername() != null && provider.getPassword() != null) {
                         System.setProperty("http.proxyUser", provider.getUsername());
                         System.setProperty("http.proxyPassword", provider.getPassword());
                         System.setProperty("https.proxyUser", provider.getUsername());
                         System.setProperty("https.proxyPassword", provider.getPassword());
                         
-                        // 设置认证器（如果尚未设置）
-                        if (Authenticator.getDefault() == null) {
-                            Authenticator.setDefault(new Authenticator() {
-                                @Override
-                                protected PasswordAuthentication getPasswordAuthentication() {
+                        // 设置 Authenticator 处理代理认证
+                        Authenticator.setDefault(new Authenticator() {
+                            @Override
+                            protected PasswordAuthentication getPasswordAuthentication() {
+                                if (getRequestorType() == RequestorType.PROXY) {
                                     return new PasswordAuthentication(
                                         provider.getUsername(), 
                                         provider.getPassword().toCharArray()
                                     );
                                 }
-                            });
-                        }
+                                return null;
+                            }
+                        });
                     }
                 }
             }

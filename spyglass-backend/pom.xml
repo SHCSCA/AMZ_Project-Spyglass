@@ -104,17 +104,18 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <!-- 测试时使用的内存数据库 H2，避免单元测试依赖外部 Postgres -->
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <scope>test</scope>
-        </dependency>
         <!-- Selenium omitted from runtime skeleton; add when needed -->
         <!-- Spring Retry：用于任务重试机制 -->
         <dependency>
             <groupId>org.springframework.retry</groupId>
             <artifactId>spring-retry</artifactId>
+        </dependency>
+        
+        <!-- Apache HttpClient 5: 支持主动代理认证(Preemptive Proxy Auth) -->
+        <dependency>
+            <groupId>org.apache.httpcomponents.client5</groupId>
+            <artifactId>httpclient5</artifactId>
+            <version>5.2.1</version>
         </dependency>
         <dependency>
             <groupId>org.springframework</groupId>

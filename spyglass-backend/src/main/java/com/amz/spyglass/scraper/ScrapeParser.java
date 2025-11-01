@@ -29,6 +29,18 @@ import java.util.Locale;
  */
 public class ScrapeParser {
 
+
+    /**
+     * 解析 HTML 字符串并返回填充的 AsinSnapshot（不包含 snapshotAt，调用方可设置）
+     */
+    public static AsinSnapshotDTO parse(String html, String url) {
+        if (html == null || html.isEmpty()) {
+            return new AsinSnapshotDTO();
+        }
+        org.jsoup.nodes.Document doc = org.jsoup.Jsoup.parse(html, url);
+        return parse(doc);
+    }
+
     /**
      * 解析 Document 并返回填充的 AsinSnapshot（不包含 snapshotAt，调用方可设置）
      */
@@ -50,13 +62,13 @@ public class ScrapeParser {
         }
         s.setPrice(parsePriceToBigDecimal(priceText));
 
-                // BSR: 查找 "Best Sellers Rank" 信息，支持多种格式
+        // BSR: 查找 "Best Sellers Rank" 信息，支持多种格式
         Integer bsr = null;
         String bsrCategory = null;
         String bsrSubcategory = null;
         Integer bsrSubcategoryRank = null;
         
-        // 1. 查找表格形式的BSR信息（新格式）
+                // 1. 查找表格形式的BSR信息(新格式)
         Elements bsrRows = doc.select("th:containsOwn(Best Sellers Rank), th:contains(Best Sellers Rank)");
         for (Element bsrHeader : bsrRows) {
             Element bsrCell = bsrHeader.nextElementSibling();
@@ -66,8 +78,9 @@ public class ScrapeParser {
                 for (Element item : bsrItems) {
                     String itemText = item.text();
                     
-                    // 解析主排名：#112,126 in Home & Kitchen
-                    if (itemText.contains("#") && itemText.contains(" in ") && bsr == null) {
+                    // 解析主排名：#144,004 in Home & Kitchen (See Top 100...)
+                    // 第一个包含"in"且包含括号的是主分类
+                    if (itemText.contains("#") && itemText.contains(" in ") && itemText.contains("(") && bsr == null) {
                         String rankPart = itemText.substring(itemText.indexOf("#") + 1);
                         String[] parts = rankPart.split(" in ", 2);
                         if (parts.length >= 2) {
@@ -76,7 +89,7 @@ public class ScrapeParser {
                             try {
                                 if (!rankStr.isEmpty()) {
                                     bsr = Integer.parseInt(rankStr);
-                                    // 提取大类
+                                    // 提取大类（括号前的部分）
                                     String categoryPart = parts[1];
                                     int parenIndex = categoryPart.indexOf('(');
                                     if (parenIndex > 0) {
@@ -91,7 +104,8 @@ public class ScrapeParser {
                         }
                     }
                     
-                    // 解析子分类排名：#338 in Home Office Desks
+                    // 解析子分类排名：#423 in Home Office Desks
+                    // 不包含括号的是子分类
                     else if (itemText.contains("#") && itemText.contains(" in ") && !itemText.contains("(")) {
                         String rankPart = itemText.substring(itemText.indexOf("#") + 1);
                         String[] parts = rankPart.split(" in ", 2);
@@ -171,6 +185,8 @@ public class ScrapeParser {
         s.setBsrCategory(bsrCategory);
         s.setBsrSubcategory(bsrSubcategory);
         s.setBsrSubcategoryRank(bsrSubcategoryRank);
+        // Debug日志
+        System.out.println("[Parser DEBUG] BSR解析结果: bsr=" + bsr + ", category=" + bsrCategory + ", subcat=" + bsrSubcategory + ", subrank=" + bsrSubcategoryRank);
 
         // inventory: 更准确地解析库存信息
         Integer inventory = null;
@@ -250,7 +266,8 @@ public class ScrapeParser {
 
         // feature bullets（五点要点）: 优先选择常见的 #feature-bullets 列表
         try {
-            Elements bullets = doc.select("#feature-bullets .a-list-item, #feature-bullets li");
+            // 只选择 li 元素，避免同时选择 li 和其内部的 span.a-list-item 导致重复
+            Elements bullets = doc.select("#feature-bullets li");
             StringBuilder sb = new StringBuilder();
             for (Element b : bullets) {
                 String text = b.text().trim();
@@ -269,22 +286,31 @@ public class ScrapeParser {
         String aplusHtml = aplus == null ? null : aplus.html();
         s.setAplusMd5(aplusHtml == null ? null : md5Hex(aplusHtml));
 
-        // 评论总数与平均评分（常见选择器）
+        // 评论总数与平均评分(常见选择器)
         try {
+            // 评论总数: 查找 data-hook="total-review-count" 或 #acrCustomerReviewText
             String reviewsText = null;
-            org.jsoup.nodes.Element revEl = doc.selectFirst("#acrCustomerReviewText, #reviewSummary .a-section .a-size-base");
+            org.jsoup.nodes.Element revEl = doc.selectFirst("[data-hook=total-review-count], #acrCustomerReviewText");
             if (revEl != null) reviewsText = revEl.text();
             if (reviewsText != null) {
+                // 从 "15 global ratings" 或 "15 ratings" 中提取数字
                 String digits = reviewsText.replaceAll("[^0-9]", "");
                 if (!digits.isEmpty()) s.setTotalReviews(Integer.parseInt(digits));
             }
 
-            // 平均评分选择器
-            org.jsoup.nodes.Element avgEl = doc.selectFirst("#averageCustomerReviews .a-icon-alt, span[data-hook=rating-out-of-text], .review-rating");
+            // 平均评分: 查找 data-hook="rating-out-of-text" 或 .a-icon-alt
+            org.jsoup.nodes.Element avgEl = doc.selectFirst("[data-hook=rating-out-of-text], #averageCustomerReviews .a-icon-alt");
             if (avgEl != null) {
-                String avgText = avgEl.text().replaceAll("[^0-9\\.]", "");
-                if (!avgText.isEmpty()) s.setAvgRating(new java.math.BigDecimal(avgText));
+                String avgText = avgEl.text(); // "4.7 out of 5" or "4.7 out of 5 stars"
+                // 提取第一个浮点数
+                java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("(\\d+\\.\\d+)");
+                java.util.regex.Matcher matcher = pattern.matcher(avgText);
+                if (matcher.find()) {
+                    s.setAvgRating(new java.math.BigDecimal(matcher.group(1)));
+                }
             }
+            // Debug日志
+            System.out.println("[Parser DEBUG] 评论/评分解析结果: total_reviews=" + s.getTotalReviews() + ", avg_rating=" + s.getAvgRating());
         } catch (Exception ignored) {}
 
         // 尝试抓取最近的差评（1-3星），选择评论列表中第一个满足条件的项

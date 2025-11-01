@@ -1,37 +1,47 @@
 package com.amz.spyglass.scraper;
 
 import com.amz.spyglass.config.ProxyConfig;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.hc.client5.http.auth.AuthScope;
+import org.apache.hc.client5.http.auth.UsernamePasswordCredentials;
+import org.apache.hc.client5.http.classic.methods.HttpGet;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.auth.BasicCredentialsProvider;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpResponse;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.client5.http.impl.routing.DefaultProxyRoutePlanner;
+import org.apache.hc.core5.http.HttpHost;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.apache.hc.core5.util.Timeout;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.net.*;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
- * 使用Java 11+ HttpClient的HTTP爬虫实现
- * 支持代理认证和现代HTTP特性
+ * HttpClient抓取器 - 使用Apache HttpClient 5支持主动代理认证(Preemptive Proxy Auth)
+ * 解决Novproxy需要在CONNECT阶段就发送Proxy-Authorization header的问题
  */
+@Slf4j
 @Component
 public class HttpClientScraper implements Scraper {
 
-    private final ProxyManager proxyManager;
-    
-    public HttpClientScraper(ProxyManager proxyManager) {
-        this.proxyManager = proxyManager;
-    }
+    @Autowired
+    private ProxyManager proxyManager;
 
     @Override
     public String fetchTitle(String url) throws Exception {
-        String html = fetchContent(url);
+        String html = fetchWithProxy(url);
+        Document doc = Jsoup.parse(html);
         
-        // 简单的标题提取
+        // 提取标题
         int titleStart = html.indexOf("<title>");
         if (titleStart == -1) return "No Title";
         
-        titleStart += 7; // "<title>".length()
+        titleStart += 7;
         int titleEnd = html.indexOf("</title>", titleStart);
         if (titleEnd == -1) return "No Title";
         
@@ -40,77 +50,101 @@ public class HttpClientScraper implements Scraper {
 
     @Override
     public AsinSnapshotDTO fetchSnapshot(String url) throws Exception {
-        String html = fetchContent(url);
-        
-        // 使用现有的ScrapeParser来解析内容
-        // 需要将HTML字符串转换为Document对象
-        org.jsoup.nodes.Document doc = org.jsoup.Jsoup.parse(html);
+        log.debug("[HttpClient] 开始抓取: {}", url);
+        String html = fetchWithProxy(url);
+        Document doc = Jsoup.parse(html);
         AsinSnapshotDTO snapshot = ScrapeParser.parse(doc);
         snapshot.setSnapshotAt(java.time.Instant.now());
-        
         return snapshot;
     }
-    
-    private String fetchContent(String url) throws Exception {
+
+    /**
+     * 使用Apache HttpClient 5 + 主动代理认证抓取HTML
+     */
+    private String fetchWithProxy(String url) throws Exception {
         ProxyConfig.ProxyProvider provider = proxyManager.nextProxy();
         
-        HttpClient.Builder clientBuilder = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(30));
-        
-        // 如果有代理配置，设置代理和认证
-        if (provider != null) {
-            String proxyHost = extractHost(provider.getUrl());
-            int proxyPort = extractPort(provider.getUrl());
-            
-            clientBuilder.proxy(ProxySelector.of(new InetSocketAddress(proxyHost, proxyPort)));
-            
-            // 设置代理认证
-            if (provider.getUsername() != null && provider.getPassword() != null) {
-                // 设置系统属性用于代理认证
-                System.setProperty("jdk.http.auth.tunneling.disabledSchemes", "");
-                System.setProperty("jdk.http.auth.proxying.disabledSchemes", "");
-                
-                clientBuilder.authenticator(new Authenticator() {
-                    @Override
-                    protected PasswordAuthentication getPasswordAuthentication() {
-                        if (getRequestorType() == RequestorType.PROXY) {
-                            return new PasswordAuthentication(
-                                provider.getUsername(), 
-                                provider.getPassword().toCharArray()
-                            );
-                        }
-                        return null;
-                    }
-                });
-            }
+        if (provider == null || provider.getUrl() == null) {
+            throw new RuntimeException("未配置代理");
         }
         
-        HttpClient client = clientBuilder.build();
+        String proxyHost = extractHost(provider.getUrl());
+        int proxyPort = extractPort(provider.getUrl());
         
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(url))
-            .timeout(Duration.ofSeconds(30))
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-            .GET()
+        log.debug("[HttpClient] 使用代理: {}:{} 用户: {}", proxyHost, proxyPort, provider.getUsername());
+        
+        // 创建代理主机
+        HttpHost proxy = new HttpHost(proxyHost, proxyPort);
+        
+        // 配置主动代理认证(Preemptive Authentication)
+        BasicCredentialsProvider credsProvider = new BasicCredentialsProvider();
+        if (provider.getUsername() != null && provider.getPassword() != null) {
+            credsProvider.setCredentials(
+                new AuthScope(proxy),
+                new UsernamePasswordCredentials(
+                    provider.getUsername(), 
+                    provider.getPassword().toCharArray()
+                )
+            );
+        }
+        
+        // 配置请求超时
+        RequestConfig requestConfig = RequestConfig.custom()
+            .setConnectTimeout(Timeout.of(30, TimeUnit.SECONDS))
+            .setResponseTimeout(Timeout.of(30, TimeUnit.SECONDS))
             .build();
         
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        
-        if (response.statusCode() != 200) {
-            throw new RuntimeException("HTTP " + response.statusCode() + " for " + url);
+        // 创建HttpClient,启用代理路由和主动认证
+        try (CloseableHttpClient httpClient = HttpClients.custom()
+                .setDefaultCredentialsProvider(credsProvider)
+                .setRoutePlanner(new DefaultProxyRoutePlanner(proxy))
+                .setDefaultRequestConfig(requestConfig)
+                .build()) {
+            
+            HttpGet request = new HttpGet(url);
+            
+            // 增强Headers模拟真实浏览器
+            request.setHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+            request.setHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
+            request.setHeader("Accept-Language", "en-US,en;q=0.9");
+            request.setHeader("Accept-Encoding", "gzip, deflate, br");
+            request.setHeader("Connection", "keep-alive");
+            request.setHeader("Upgrade-Insecure-Requests", "1");
+            request.setHeader("Sec-Fetch-Dest", "document");
+            request.setHeader("Sec-Fetch-Mode", "navigate");
+            request.setHeader("Sec-Fetch-Site", "none");
+            request.setHeader("Sec-Fetch-User", "?1");
+            request.setHeader("Cache-Control", "max-age=0");
+            
+            try (CloseableHttpResponse response = httpClient.execute(request)) {
+                int statusCode = response.getCode();
+                
+                if (statusCode != 200) {
+                    throw new RuntimeException("HTTP " + statusCode + " for " + url + 
+                        " | 代理: " + proxyHost + ":" + proxyPort + 
+                        " | 用户: " + provider.getUsername());
+                }
+                
+                String html = EntityUtils.toString(response.getEntity());
+                log.debug("[HttpClient] 抓取成功，HTML长度: {}", html.length());
+                return html;
+                
+            } catch (Exception e) {
+                throw new RuntimeException("代理请求失败: " + e.getMessage() + 
+                    " | 代理: " + proxyHost + ":" + proxyPort + 
+                    " | 用户: " + provider.getUsername(), e);
+            }
         }
-        
-        return response.body();
     }
-    
+
     private String extractHost(String url) {
         if (url == null) return "localhost";
         
         String[] parts = url.split(":");
         if (parts.length == 2) {
-            return parts[0]; // host:port 格式
+            return parts[0];
         } else if (parts.length >= 3) {
-            return parts[1].replace("//", ""); // protocol://host:port 格式
+            return parts[1].replace("//", "");
         }
         return url;
     }
@@ -120,9 +154,9 @@ public class HttpClientScraper implements Scraper {
         
         String[] parts = url.split(":");
         if (parts.length == 2) {
-            return Integer.parseInt(parts[1]); // host:port 格式
+            return Integer.parseInt(parts[1]);
         } else if (parts.length >= 3) {
-            return Integer.parseInt(parts[2]); // protocol://host:port 格式
+            return Integer.parseInt(parts[2]);
         }
         return 8080;
     }
