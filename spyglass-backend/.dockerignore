@@ -1,0 +1,17 @@
+# Maven / build outputs
+target
+.idea
+.vscode
+*.iml
+.mvn/wrapper/maven-wrapper.jar
+# Logs
+*.log
+logs/
+# Local env files
+.env
+# Git
+.git
+.gitignore
+# OS / editor
+.DS_Store
+Thumbs.db
