@@ -62,14 +62,16 @@ public class AsinController {
      * @return 监控商品列表（DTO格式）
      */
     @GetMapping
-    @Operation(summary = "获取所有监控的 ASIN 列表", description = "返回一个包含所有已添加 ASIN 简要信息的列表。",
+    @Operation(summary = "获取所有监控的 ASIN 列表 (分页)", description = "支持分页与按创建时间排序。",
         responses = {
             @ApiResponse(responseCode = "200", description = "成功获取列表", content = @Content(array = @ArraySchema(schema = @Schema(implementation = AsinResponse.class))))
         })
-    public List<AsinResponse> list() {
-        log.info("Request to list all ASINs");
-        List<AsinModel> asins = asinRepository.findAll();
-        log.info("Found {} ASINs", asins.size());
+    public List<AsinResponse> list(
+            @Parameter(description = "页码 (从0开始)", example = "0") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "每页条数", example = "50") @RequestParam(defaultValue = "50") int size) {
+        log.info("Request to list ASINs page={}, size={}", page, size);
+        List<AsinModel> asins = asinRepository.findAll(PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"))).getContent();
+        log.info("Found {} ASINs in page {}", asins.size(), page);
         return asins.stream().map(this::toResponse).collect(Collectors.toList());
     }
 

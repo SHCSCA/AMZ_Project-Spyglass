@@ -65,16 +65,33 @@ spyglass-backend/
 docker-compose.yml
 ```
 
-### 快速启动（Docker Compose）
+### 快速启动（Docker Compose，使用外部 MySQL）
+1. 准备一个可访问的 MySQL 8 数据库，创建库：`CREATE DATABASE spyglass CHARACTER SET utf8mb4;`
+2. 创建用户（如需要）：`CREATE USER 'spyuser'@'%' IDENTIFIED BY 'StrongPass!'; GRANT ALL ON spyglass.* TO 'spyuser'@'%';`
+3. 在项目根目录创建 `.env` 文件：
+```
+DB_HOST=your.mysql.host
+DB_PORT=3306
+DB_NAME=spyglass
+DB_USER=spyuser
+DB_PASSWORD=StrongPass!
+SCRAPER_FIXED_DELAY_MS=14400000
+```
+4. 启动：
 ```
 git clone <repo>
 cd AMZ_Project-Spyglass
-docker compose up --build -d
+docker compose --env-file .env up --build -d
+```
+5. 验证：
+```
+curl -fsS http://localhost:8080/actuator/health
+curl -fsS http://localhost:8080/v3/api-docs | head -n 20
 ```
 启动后：
-* 后端：`http://localhost:8080`（或你的服务器 IP）
-* OpenAPI：`http://localhost:8080/swagger-ui/index.html` / `http://localhost:8080/v3/api-docs`
-* 健康检查：`http://localhost:8080/actuator/health`
+* 后端：`http://localhost:8080`
+* OpenAPI：`/swagger-ui/index.html` / `/v3/api-docs`
+* 健康检查：`/actuator/health`
 
 ### 本地开发启动（不使用 Docker）
 1. 安装并启动本地 MySQL：创建数据库 `spyglass`，编码 `utf8mb4`。
@@ -114,7 +131,7 @@ mvn -DskipTests spring-boot:run
 5. `AlertService` 对比上一次快照 -> 触发并写入 `alert_log` / 可选钉钉推送。
 6. 新的差评写入 `review_alert`（并对 1-3 星差评触发告警）。
 
-### 示例：添加与查询 ASIN
+### 示例：添加与查询 ASIN（分页）
 ```
 # 添加 ASIN
 curl -X POST http://localhost:8080/api/asin \
@@ -122,22 +139,43 @@ curl -X POST http://localhost:8080/api/asin \
 	-d '{"asin":"B0TEST1234","site":"US","nickname":"Test Product","inventoryThreshold":20}'
 
 # 查询列表
-curl http://localhost:8080/api/asin
+curl 'http://localhost:8080/api/asin?page=0&size=20'
 
-# 查询历史（最近30天）
-curl http://localhost:8080/api/asin/1/history?range=30d
+# 查询历史（最近30天，分页第0页）
+curl 'http://localhost:8080/api/asin/1/history?range=30d&page=0&size=100'
 ```
 
-### 示例：警报与差评（待补充端点实现）
+### 示例：警报与差评（分页与过滤）
 ```
 # 获取最新警报
-curl http://localhost:8080/api/alerts?limit=50&status=NEW
+curl 'http://localhost:8080/api/alerts?page=0&size=50&type=PRICE_CHANGE'
 
 # 获取某 ASIN 的警报
 curl http://localhost:8080/api/asin/1/alerts
 
 # 获取某 ASIN 的差评（仅 1-3 星）
-curl http://localhost:8080/api/asin/1/reviews?rating=negative
+curl 'http://localhost:8080/api/asin/1/reviews?rating=negative&page=0&size=50'
+
+### 分页与查询参数说明
+| 端点 | 参数 | 说明 |
+| --- | --- | --- |
+| `GET /api/asin` | `page` / `size` | ASIN 列表分页，按 id DESC 排序 |
+| `GET /api/asin/{id}/history` | `range` / `page` / `size` | 时间范围与分页（历史数据内部按 snapshotAt DESC）|
+| `GET /api/alerts` | `page` / `size` / `type` | 最新告警分页，可按类型过滤 |
+| `GET /api/asin/{id}/reviews` | `rating=negative` / `page` / `size` | 负面评论过滤（1-3 星）与分页 |
+
+### 使用外部数据库的注意事项
+* 需要确保应用容器能够访问外部 MySQL（安全组 / 防火墙开放 3306）。
+* 建议为生产环境开启只读账号与最小权限策略。
+* 如果使用云数据库（RDS 等），启用自动备份与多可用区。 
+
+### 性能调优建议（可选）
+| 场景 | 建议 |
+| --- | --- |
+| 历史数据量大 | 为 `asin_history(asin_id, snapshot_at)` 建复合索引 |
+| 告警查询频繁 | 为 `alert_log(alert_type, alert_at)` 建索引 |
+| 差评查询频繁 | 为 `review_alert(asin_id, rating)` 建索引 |
+| 高并发 | 引入 Caffeine/Redis 缓存热点 ASIN 基础信息 |
 ```
 
 ### 常见问题 (FAQ)
