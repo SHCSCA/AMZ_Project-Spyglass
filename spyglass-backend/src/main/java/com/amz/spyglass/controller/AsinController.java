@@ -81,6 +81,9 @@ public class AsinController {
         resp.setTotal(pageResult.getTotalElements());
         resp.setPage(page);
         resp.setSize(size);
+        resp.setTotalPages(pageResult.getTotalPages());
+        resp.setHasNext(pageResult.hasNext());
+        resp.setHasPrevious(pageResult.hasPrevious());
         log.info("Found {} ASINs (total {} records) in page {}", items.size(), resp.getTotal(), page);
         return resp;
     }

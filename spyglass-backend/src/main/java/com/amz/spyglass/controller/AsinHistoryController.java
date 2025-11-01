@@ -18,6 +18,8 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import com.amz.spyglass.dto.PageResponse;
 
 /**
@@ -76,17 +78,19 @@ public class AsinHistoryController {
             @Parameter(description = "每页条数", example = "200") @RequestParam(defaultValue = "200") int size) {
         log.info("Request history asinId={}, range={}, page={}, size={}", asinId, range, page, size);
         Instant since = parseRange(range);
-    // TODO: 可在 Repository 添加分页查询以避免内存截取
-    List<AsinHistoryModel> all = asinHistoryRepository.findByAsinIdAndSnapshotAtAfterOrderBySnapshotAtDesc(asinId, since);
-    List<AsinHistoryModel> sliced = all.stream().skip((long) page * size).limit(size).collect(Collectors.toList());
-    List<AsinHistoryResponse> items = sliced.stream().map(this::toDto).collect(Collectors.toList());
-    PageResponse<AsinHistoryResponse> resp = new PageResponse<>();
-    resp.setItems(items);
-    resp.setTotal(all.size());
-    resp.setPage(page);
-    resp.setSize(size);
-    log.info("Found {} history records (paged) for ASIN ID: {} (total={})", items.size(), asinId, all.size());
-    return resp;
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "snapshotAt"));
+        var pageResult = asinHistoryRepository.findByAsinIdAndSnapshotAtAfterOrderBySnapshotAtDesc(asinId, since, pageable);
+        List<AsinHistoryResponse> items = pageResult.getContent().stream().map(this::toDto).collect(Collectors.toList());
+        PageResponse<AsinHistoryResponse> resp = new PageResponse<>();
+        resp.setItems(items);
+        resp.setTotal(pageResult.getTotalElements());
+        resp.setPage(page);
+        resp.setSize(size);
+        resp.setTotalPages(pageResult.getTotalPages());
+        resp.setHasNext(pageResult.hasNext());
+        resp.setHasPrevious(pageResult.hasPrevious());
+        log.info("Found {} history records (paged) for ASIN ID: {} (total={})", items.size(), asinId, resp.getTotal());
+        return resp;
     }
 
     private Instant parseRange(String range) {

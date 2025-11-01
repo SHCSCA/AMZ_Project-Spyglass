@@ -16,4 +16,10 @@ public class PageResponse<T> {
     private int page;
     @Schema(description = "每页大小")
     private int size;
+    @Schema(description = "总页数")
+    private int totalPages;
+    @Schema(description = "是否存在下一页")
+    private boolean hasNext;
+    @Schema(description = "是否存在上一页")
+    private boolean hasPrevious;
 }

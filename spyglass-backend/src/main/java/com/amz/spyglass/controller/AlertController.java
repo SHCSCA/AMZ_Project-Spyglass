@@ -48,12 +48,15 @@ public class AlertController {
     var filtered = pageResult.getContent().stream()
         .filter(a -> type == null || type.equalsIgnoreCase(a.getAlertType()))
         .map(this::toDto).collect(Collectors.toList());
-    PageResponse<AlertLogResponse> resp = new PageResponse<>();
-    resp.setItems(filtered);
-    resp.setTotal(pageResult.getTotalElements());
-    resp.setPage(page);
-    resp.setSize(size);
-    return resp;
+        PageResponse<AlertLogResponse> resp = new PageResponse<>();
+        resp.setItems(filtered);
+        resp.setTotal(pageResult.getTotalElements());
+        resp.setPage(page);
+        resp.setSize(size);
+        resp.setTotalPages(pageResult.getTotalPages());
+        resp.setHasNext(pageResult.hasNext());
+        resp.setHasPrevious(pageResult.hasPrevious());
+        return resp;
     }
 
     private AlertLogResponse toDto(AlertLog e) {

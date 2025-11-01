@@ -58,6 +58,9 @@ public class AsinAlertController {
         resp.setTotal(pageResult.getTotalElements());
         resp.setPage(page);
         resp.setSize(size);
+        resp.setTotalPages(pageResult.getTotalPages());
+        resp.setHasNext(pageResult.hasNext());
+        resp.setHasPrevious(pageResult.hasPrevious());
         return resp;
     }
 
