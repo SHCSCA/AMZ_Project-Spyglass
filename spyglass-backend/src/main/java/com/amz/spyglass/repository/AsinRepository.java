@@ -14,4 +14,5 @@ import java.util.Optional;
  */
 public interface AsinRepository extends JpaRepository<AsinModel, Long> {
     Optional<AsinModel> findByAsin(String asin);
+    Optional<AsinModel> findByAsinAndSite(String asin, String site);
 }

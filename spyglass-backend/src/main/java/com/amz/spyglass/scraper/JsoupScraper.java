@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.concurrent.ThreadLocalRandom;
 import java.net.Authenticator;
 import java.net.PasswordAuthentication;
 
@@ -93,7 +94,7 @@ public class JsoupScraper implements Scraper {
         try {
             int min = scraperProperties.getRandomDelayMinMs();
             int max = scraperProperties.getRandomDelayMaxMs();
-            int delay = min + (int)(Math.random() * Math.max(1, (max - min)));
+            int delay = min + (int)(ThreadLocalRandom.current().nextDouble() * Math.max(1, (max - min)));
             Thread.sleep(delay);
             logger.debug("[Jsoup] 随机延迟 {} ms 后开始抓取 url={}", delay, url);
         } catch (InterruptedException ignored) {}
@@ -229,7 +230,7 @@ public class JsoupScraper implements Scraper {
                 "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0"
         };
-        return uas[(int)(Math.random()*uas.length)];
+        return uas[(int)(ThreadLocalRandom.current().nextDouble()*uas.length)];
     }
 
     private String truncate(String input, int max) {

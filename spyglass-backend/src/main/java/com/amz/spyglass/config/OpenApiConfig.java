@@ -14,7 +14,7 @@ import org.springframework.context.annotation.Configuration;
 public class OpenApiConfig {
 
     @Bean
-    public OpenAPI spyglassOpenAPI() {
+    OpenAPI spyglassOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
                         .title("Spyglass API")
