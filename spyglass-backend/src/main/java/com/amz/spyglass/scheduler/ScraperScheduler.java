@@ -31,7 +31,7 @@ import java.time.Instant;
  * 注意：当前未包含“新旧快照对比并触发告警”的逻辑，可在成功保存后扩展。
  */
 @Component
-@Profile("!test") // 测试环境下不启用调度器，避免影响单元测试的确定性
+@Profile("!test") // test profile 下不加载该 Bean
 @EnableRetry // 启用 Spring Retry，配合 @Retryable 注解使用
 public class ScraperScheduler {
 
@@ -140,9 +140,8 @@ public class ScraperScheduler {
             // 写入历史快照（失败不影响主任务成功，仅记录警告）
             persistHistorySnapshot(asinModel, snap);
             // 触发告警对比
-            try { alertService.compareAndAlert(asinModel, snap); } catch (Exception e) { logger.warn("[Task] 告警触发失败 ASIN_ID={} msg={}", asinId, e.getMessage()); }
+            try { alertService.processAlerts(asinModel, snap); } catch (Exception e) { logger.warn("[Task] 告警触发失败 ASIN_ID={} msg={}", asinId, e.getMessage()); }
 
-            // TODO: 可在此处添加“新旧快照对比 + 告警触发”逻辑，比如调用 AlertService.compareAndAlert(...)
         } catch (Exception ex) {
             // 发生异常，更新任务重试计数与状态
             logger.error("[Task] 抓取失败 ASIN_ID={} 当前尝试序号={} 错误信息={}", asinId, previousRetries + 1, ex.getMessage(), ex);
@@ -176,10 +175,17 @@ public class ScraperScheduler {
             h.setTitle(snap.getTitle());
             h.setPrice(snap.getPrice());
             h.setBsr(snap.getBsr());
+            h.setBsrCategory(snap.getBsrCategory());
+            h.setBsrSubcategory(snap.getBsrSubcategory());
+            h.setBsrSubcategoryRank(snap.getBsrSubcategoryRank());
             h.setInventory(snap.getInventory());
             h.setImageMd5(snap.getImageMd5());
             h.setAplusMd5(snap.getAplusMd5());
             h.setBulletPoints(snap.getBulletPoints());
+            h.setTotalReviews(snap.getTotalReviews());
+            h.setAvgRating(snap.getAvgRating());
+            // 新增：保存最新差评 MD5 用于后续告警对比
+            h.setLatestNegativeReviewMd5(snap.getLatestNegativeReviewMd5());
             h.setSnapshotAt(snap.getSnapshotAt() == null ? Instant.now() : snap.getSnapshotAt());
             asinHistoryRepository.save(h);
             logger.debug("[History] 保存快照成功 ASIN={} snapshotAt={}", asinModel.getAsin(), h.getSnapshotAt());

@@ -47,4 +47,13 @@ public class AsinModel extends BaseEntityModel {
      * 库存预警阈值，低于此值触发告警
      */
     private Integer inventoryThreshold;
+
+    /**
+     * 获取用于显示的名称，优先使用昵称，否则返回ASIN
+     * @return 显示名称
+     */
+    @Transient
+    public String getNicknameOrAsin() {
+        return (nickname != null && !nickname.trim().isEmpty()) ? nickname : asin;
+    }
 }

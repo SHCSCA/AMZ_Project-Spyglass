@@ -55,7 +55,7 @@ public class ScraperFlowIntegrationTest {
         assertEquals(new BigDecimal("4.3"), merged.getAvgRating());
         assertEquals("BP1\nBP2", merged.getBulletPoints());
 
-        // 验证 AlertService 未被直接调用（调度器层才调用 compareAndAlert）
-        Mockito.verify(alertService, Mockito.never()).compareAndAlert(Mockito.any(), Mockito.any());
+        // 验证 AlertService 未被直接调用（调度器层才调用 processAlerts）
+        Mockito.verify(alertService, Mockito.never()).processAlerts(Mockito.any(), Mockito.any());
     }
 }

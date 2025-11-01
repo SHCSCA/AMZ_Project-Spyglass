@@ -20,6 +20,16 @@ spring:
 server:
   port: ${PORT:8080}
 
+# Logging configuration
+logging:
+  file:
+    name: spyglass.log # 指定日志文件名
+  level:
+    root: INFO
+    com.amz.spyglass: DEBUG # 将应用包的日志级别设为 DEBUG
+    org.hibernate.SQL: DEBUG # 打印 Hibernate SQL
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE # 打印 SQL 参数绑定
+
 # Spring Doc OpenAPI 配置
 springdoc:
   swagger-ui:
@@ -29,6 +39,7 @@ springdoc:
 
 # 爬虫配置
 scraper:
+  fixedDelayMs: 3000 # 调度器轮询间隔（毫秒），3秒用于快速测试
   proxy:
     enabled: true
     providers:
