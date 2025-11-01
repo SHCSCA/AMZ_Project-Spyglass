@@ -1,6 +1,8 @@
 package com.amz.spyglass.repository;
 
 import com.amz.spyglass.model.AsinHistoryModel;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.Instant;
@@ -14,4 +16,7 @@ public interface AsinHistoryRepository extends JpaRepository<AsinHistoryModel, L
     List<AsinHistoryModel> findByAsinId(Long asinId);
     List<AsinHistoryModel> findByAsinIdOrderBySnapshotAtDesc(Long asinId);
     List<AsinHistoryModel> findByAsinIdAndSnapshotAtAfterOrderBySnapshotAtDesc(Long asinId, Instant since);
+
+    // 新增分页方法：避免在 Controller 内存分页
+    Page<AsinHistoryModel> findByAsinIdAndSnapshotAtAfterOrderBySnapshotAtDesc(Long asinId, Instant since, Pageable pageable);
 }

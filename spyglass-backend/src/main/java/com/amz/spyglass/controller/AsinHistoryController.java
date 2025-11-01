@@ -7,6 +7,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Schema;
 import org.springframework.web.bind.annotation.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +18,9 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import com.amz.spyglass.dto.PageResponse;
 
 /**
  * ASIN 商品历史数据控制器
@@ -59,19 +65,32 @@ public class AsinHistoryController {
      * @return 历史记录列表（按时间倒序）
      */
     @GetMapping("/{id}/history")
-    @Operation(summary = "获取指定 ASIN 的历史数据", description = "根据 ASIN 的唯一 ID，查询其在特定时间范围内的历史抓取快照，按时间降序排列。")
-    @ApiResponse(responseCode = "200", description = "成功获取历史数据")
-    @ApiResponse(responseCode = "404", description = "未找到指定 ID 的 ASIN")
-    public List<AsinHistoryResponse> history(
+    @Operation(summary = "查询指定 ASIN 的抓取历史", description = "支持通过开始/结束时间过滤，时间格式为 ISO-8601。",
+        responses = {
+            @ApiResponse(responseCode = "200", description = "查询成功", content = @Content(array = @ArraySchema(schema = @Schema(implementation = AsinHistoryResponse.class)))),
+            @ApiResponse(responseCode = "400", description = "时间格式错误")
+        })
+    public PageResponse<AsinHistoryResponse> history(
             @Parameter(description = "要查询的 ASIN 的唯一 ID", required = true, example = "1") @PathVariable("id") Long asinId,
             @Parameter(description = "查询的时间范围，例如 '7d' (7天), '30d' (30天), '3m' (3个月)。默认为 30 天。", example = "30d")
-            @RequestParam(value = "range", defaultValue = "30d") String range) {
-        log.info("Request for history for ASIN ID: {}, range: {}", asinId, range);
-
+            @RequestParam(value = "range", defaultValue = "30d") String range,
+            @Parameter(description = "页码 (从0开始)", example = "0") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "每页条数", example = "200") @RequestParam(defaultValue = "200") int size) {
+        log.info("Request history asinId={}, range={}, page={}, size={}", asinId, range, page, size);
         Instant since = parseRange(range);
-        List<AsinHistoryModel> rows = asinHistoryRepository.findByAsinIdAndSnapshotAtAfterOrderBySnapshotAtDesc(asinId, since);
-        log.info("Found {} history records for ASIN ID: {}", rows.size(), asinId);
-        return rows.stream().map(this::toDto).collect(Collectors.toList());
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "snapshotAt"));
+        var pageResult = asinHistoryRepository.findByAsinIdAndSnapshotAtAfterOrderBySnapshotAtDesc(asinId, since, pageable);
+        List<AsinHistoryResponse> items = pageResult.getContent().stream().map(this::toDto).collect(Collectors.toList());
+        PageResponse<AsinHistoryResponse> resp = new PageResponse<>();
+        resp.setItems(items);
+        resp.setTotal(pageResult.getTotalElements());
+        resp.setPage(page);
+        resp.setSize(size);
+        resp.setTotalPages(pageResult.getTotalPages());
+        resp.setHasNext(pageResult.hasNext());
+        resp.setHasPrevious(pageResult.hasPrevious());
+        log.info("Found {} history records (paged) for ASIN ID: {} (total={})", items.size(), asinId, resp.getTotal());
+        return resp;
     }
 
     private Instant parseRange(String range) {
