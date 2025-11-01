@@ -192,7 +192,6 @@ curl 'http://localhost:8080/api/asin/1/reviews?rating=negative&page=0&size=50'
 curl 'http://localhost:8080/api/asin/1/history?range=30d&page=0&size=100' | jq '.total,.totalPages,.hasNext'
 ```
 
-
 ### 使用外部数据库的注意事项
 * 需要确保应用容器能够访问外部 MySQL（安全组 / 防火墙开放 3306）。
 * 建议为生产环境开启只读账号与最小权限策略。
@@ -205,7 +204,7 @@ curl 'http://localhost:8080/api/asin/1/history?range=30d&page=0&size=100' | jq '
 | 告警查询频繁 | 为 `alert_log(alert_type, alert_at)` 建索引 |
 | 差评查询频繁 | 为 `review_alert(asin_id, rating)` 建索引 |
 | 高并发 | 引入 Caffeine/Redis 缓存热点 ASIN 基础信息 |
-```
+
 
 ### 常见问题 (FAQ)
 | 问题 | 说明 | 解决方案 |
@@ -384,5 +383,3 @@ curl 'http://localhost:8080/api/asin/1/history?range=30d&page=0&size=100' | jq '
 | V3.x | 智能增强 | 基于差评的自动回复建议、价格策略模拟 |
 
 ---
-
-> 若你需要自动化补齐尚未实现的 Alert / Review API，请在任务中指出，我可以继续生成控制器、DTO 与基础测试。
