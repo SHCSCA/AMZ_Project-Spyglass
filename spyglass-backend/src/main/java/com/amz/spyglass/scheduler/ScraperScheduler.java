@@ -31,7 +31,7 @@ import java.time.Instant;
  * 注意：当前未包含“新旧快照对比并触发告警”的逻辑，可在成功保存后扩展。
  */
 @Component
-@Profile("!test") // test profile 下不加载该 Bean
+@Profile("!test && !mysqltest") // 在 test 与 mysqltest 集成测试 profile 下不加载，避免初始与定时调度干扰计数
 @EnableRetry // 启用 Spring Retry，配合 @Retryable 注解使用
 public class ScraperScheduler {
 
@@ -68,7 +68,7 @@ public class ScraperScheduler {
     public void runAll() {
         long start = System.currentTimeMillis();
         logger.info("[Scheduler] 开始批量调度抓取任务 (fixedDelay={}ms)...", getConfiguredDelay());
-        var all = asinRepository.findAll();
+    java.util.List<AsinModel> all = asinRepository.findAll();
         logger.info("[Scheduler] 准备调度 ASIN 总数: {}", all.size());
         for (AsinModel asin : all) {
             try {
@@ -114,7 +114,7 @@ public class ScraperScheduler {
         // 初始化任务记录
         ScrapeTaskModel task = new ScrapeTaskModel();
         task.setAsinId(asinId);
-        task.setStatus(ScrapeTaskModel.TaskStatus.RUNNING);
+    task.setStatus(ScrapeTaskModel.TaskStatusConstants.RUNNING);
         task.setRunAt(Instant.now());
         scrapeTaskRepository.save(task);
 
@@ -131,7 +131,7 @@ public class ScraperScheduler {
                 asinModel.getAsin(), truncate(snap.getTitle(), 60), snap.getPrice(), snap.getBsr(), snap.getInventory(), snap.getImageMd5(), snap.getAplusMd5());
 
             // 标记任务成功
-            task.setStatus(ScrapeTaskModel.TaskStatus.SUCCESS);
+            task.setStatus(ScrapeTaskModel.TaskStatusConstants.SUCCESS);
             task.setMessage("title=" + (snap.getTitle() == null ? "" : truncate(snap.getTitle(), 80)));
             task.markFinished();
             scrapeTaskRepository.save(task);
@@ -148,11 +148,11 @@ public class ScraperScheduler {
             task.setRetryCount(previousRetries + 1);
             // 达到最大次数 -> 失败；否则置为 PENDING 由 Spring Retry 再次调用（下次进入方法会新增 RUNNING 记录）
             if (task.getRetryCount() >= 3) {
-                task.setStatus(ScrapeTaskModel.TaskStatus.FAILED);
+                task.setStatus(ScrapeTaskModel.TaskStatusConstants.FAILED);
                 task.setMessage("最终失败: " + ex.getMessage());
                 logger.warn("[Task] ASIN_ID={} 达到最大重试次数 ({} 次) 标记为 FAILED", asinId, task.getRetryCount());
             } else {
-                task.setStatus(ScrapeTaskModel.TaskStatus.PENDING);
+                task.setStatus(ScrapeTaskModel.TaskStatusConstants.PENDING);
                 task.setMessage("等待重试 (attempt=" + task.getRetryCount() + "/3) cause=" + ex.getMessage());
                 logger.info("[Task] ASIN_ID={} 标记为 PENDING, 将由 Spring Retry 在 1 小时后重试", asinId);
             }

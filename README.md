@@ -200,6 +200,47 @@
 docker compose up --build -d
 ```
 
+### 7.2. 本地开发与测试数据库 (mysqltest Profile + Testcontainers)
+
+为确保在开发与 CI 中获得与生产一致的行为，项目已统一迁移到 **MySQL**，并使用 `mysqltest` Profile 结合 **Testcontainers MySQL** 运行集成测试。
+
+关键点:
+1. 测试启动时自动拉取 `mysql:8.0` 镜像并启动容器。
+2. 所有集成测试使用 `@ActiveProfiles("mysqltest")`，禁用定时调度器以保证测试确定性。
+3. 测试类在 `@BeforeEach` 中显式清理目标表，不再依赖 H2 或上下文重建。
+4. 统一告警日志表: `alert_log`，价格与字段变化均写入该表并包含 `context_json`。
+5. 独立告警表 (`price_alert`, `change_alert`, `review_alert`) 仍保留用于原始记录与必要的统计/报表。
+
+运行所有测试:
+```bash
+./mvnw test -Pmysqltest
+```
+
+（也可以不显式添加 `-Pmysqltest`，因为测试类已通过注解激活 Profile）
+
+### 7.3. 数据库建表脚本 (MySQL)
+
+项目提供了基于当前 Hibernate 模型与业务字段整理的统一建表脚本：`sql/mysql-schema.sql`
+
+包含以下表:
+- `asin` / `asin_history`
+- `price_alert` / `change_alert` / `review_alert`
+- `alert_log` (统一告警入口)
+- `scrape_task`
+
+特点:
+- 全部使用 `utf8mb4` + 注释 (COMMENT)
+- 外键级联删除保证 ASIN 删除时历史与告警自动清理
+- 唯一索引: `asin(asin, site)`, `review_alert(review_id)`
+- JSON 字段: `alert_log.context_json`
+
+执行方式 (示例):
+```sql
+SOURCE sql/mysql-schema.sql;
+```
+
+> 已移除旧的 PostgreSQL `schema.sql`，当前版本仅支持 MySQL。后续如需多数据库支持，可再补充相应脚本。
+
 服务启动后，可以通过 `docker compose logs -f spyglass-backend` 查看后端实时日志。
 
 ### 7.2. 本地开发 (IDE / 命令行)

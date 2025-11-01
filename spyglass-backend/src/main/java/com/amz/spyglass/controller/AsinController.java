@@ -12,6 +12,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import jakarta.validation.Valid;
 import java.time.Instant;
@@ -43,6 +45,7 @@ import java.util.stream.Collectors;
 @Tag(name = "ASIN 管理", description = "提供对监控的 ASIN 列表进行增、删、改、查的核心接口")
 public class AsinController {
 
+    private static final Logger log = LoggerFactory.getLogger(AsinController.class);
     private final AsinRepository asinRepository;
 
     public AsinController(AsinRepository asinRepository) {
@@ -61,7 +64,10 @@ public class AsinController {
     @Operation(summary = "获取所有监控的 ASIN 列表", description = "返回一个包含所有已添加 ASIN 简要信息的列表。")
     @ApiResponse(responseCode = "200", description = "成功获取列表")
     public List<AsinResponse> list() {
-        return asinRepository.findAll().stream().map(this::toResponse).collect(Collectors.toList());
+        log.info("Request to list all ASINs");
+        List<AsinModel> asins = asinRepository.findAll();
+        log.info("Found {} ASINs", asins.size());
+        return asins.stream().map(this::toResponse).collect(Collectors.toList());
     }
 
     /**
@@ -80,6 +86,7 @@ public class AsinController {
     @ApiResponse(responseCode = "200", description = "ASIN 创建成功", content = @Content(schema = @Schema(implementation = AsinResponse.class)))
     @ApiResponse(responseCode = "400", description = "请求参数无效（例如ASIN为空或格式错误）")
     public ResponseEntity<AsinResponse> create(@Valid @RequestBody AsinRequest req) {
+        log.info("Request to create ASIN: {}", req);
         AsinModel a = new AsinModel();
         a.setAsin(req.getAsin());
         a.setSite(req.getSite());
@@ -88,6 +95,7 @@ public class AsinController {
         a.setCreatedAt(Instant.now());
         a.setUpdatedAt(Instant.now());
         AsinModel saved = asinRepository.save(a);
+        log.info("Successfully created ASIN with ID: {}", saved.getId());
         return ResponseEntity.ok(toResponse(saved));
     }
 
@@ -106,10 +114,13 @@ public class AsinController {
     @ApiResponse(responseCode = "404", description = "未找到指定 ID 的 ASIN")
     public ResponseEntity<Void> delete(
             @Parameter(description = "要删除的 ASIN 的唯一 ID", required = true, example = "1") @PathVariable Long id) {
+        log.info("Request to delete ASIN with ID: {}", id);
         if (!asinRepository.existsById(id)) {
+            log.warn("ASIN with ID: {} not found for deletion", id);
             return ResponseEntity.notFound().build();
         }
         asinRepository.deleteById(id);
+        log.info("Successfully deleted ASIN with ID: {}", id);
         return ResponseEntity.noContent().build();
     }
 
@@ -120,14 +131,19 @@ public class AsinController {
     public ResponseEntity<AsinResponse> updateConfig(
             @Parameter(description = "要更新的 ASIN 的唯一 ID", required = true, example = "1") @PathVariable Long id,
             @RequestBody AsinRequest req) {
+        log.info("Request to update config for ASIN ID: {}, with data: {}", id, req);
         return asinRepository.findById(id).map(a -> {
             a.setInventoryThreshold(req.getInventoryThreshold());
             a.setNickname(req.getNickname());
             a.setSite(req.getSite());
             a.setUpdatedAt(Instant.now());
             AsinModel saved = asinRepository.save(a);
+            log.info("Successfully updated config for ASIN ID: {}", id);
             return ResponseEntity.ok(toResponse(saved));
-        }).orElseGet(() -> ResponseEntity.notFound().build());
+        }).orElseGet(() -> {
+            log.warn("ASIN with ID: {} not found for config update", id);
+            return ResponseEntity.notFound().build();
+        });
     }
 
     private AsinResponse toResponse(AsinModel a) {

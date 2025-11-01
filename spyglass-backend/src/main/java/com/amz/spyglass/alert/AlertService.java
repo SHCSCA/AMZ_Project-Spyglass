@@ -8,8 +8,12 @@ import com.amz.spyglass.model.alert.ChangeAlert;
 import com.amz.spyglass.model.alert.PriceAlert;
 import com.amz.spyglass.repository.alert.ChangeAlertRepository;
 import com.amz.spyglass.repository.alert.PriceAlertRepository;
+import com.amz.spyglass.repository.alert.AlertLogRepository;
+import com.amz.spyglass.model.alert.AlertLog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +22,8 @@ import java.math.RoundingMode;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.Map;
+import java.util.LinkedHashMap;
 
 /**
  * 告警服务：对比新旧快照并触发告警（包括钉钉推送和价格记录入库）
@@ -31,13 +37,15 @@ public class AlertService {
     private final DingTalkPusher dingTalkPusher;
     private final PriceAlertRepository priceAlertRepository;
     private final ChangeAlertRepository changeAlertRepository;
+    private final AlertLogRepository alertLogRepository;
 
 
-    public AlertService(AsinHistoryRepository historyRepository, DingTalkPusher dingTalkPusher, PriceAlertRepository priceAlertRepository, ChangeAlertRepository changeAlertRepository) {
+    public AlertService(AsinHistoryRepository historyRepository, DingTalkPusher dingTalkPusher, PriceAlertRepository priceAlertRepository, ChangeAlertRepository changeAlertRepository, AlertLogRepository alertLogRepository) {
         this.historyRepository = historyRepository;
         this.dingTalkPusher = dingTalkPusher;
         this.priceAlertRepository = priceAlertRepository;
         this.changeAlertRepository = changeAlertRepository;
+        this.alertLogRepository = alertLogRepository;
     }
 
     @Transactional
@@ -87,7 +95,20 @@ public class AlertService {
             alert.setOldAplusMd5(last.getAplusMd5());
             alert.setNewAplusMd5(newSnap.getAplusMd5());
 
-            priceAlertRepository.save(alert);
+        priceAlertRepository.save(alert);
+        // 统一日志
+        AlertLog logRow = new AlertLog();
+        logRow.setAsinId(asin.getId());
+        logRow.setAsinCode(asin.getAsin());
+        logRow.setSite(asin.getSite());
+        logRow.setAlertType("PRICE_CHANGE");
+        logRow.setOldValue(oldPrice == null ? null : oldPrice.toPlainString());
+        logRow.setNewValue(newPrice == null ? null : newPrice.toPlainString());
+        logRow.setChangePercent(changePercent.setScale(2, RoundingMode.HALF_UP));
+        logRow.setMessage("价格变化 " + oldPrice + " -> " + newPrice);
+        String ctx = buildContextJson(asin.getAsin(), "PRICE", last.getPrice()==null?null:last.getPrice().toPlainString(), newSnap.getPrice()==null?null:newSnap.getPrice().toPlainString(), last.getPrice()==null?null:last.getPrice().doubleValue(), newSnap.getPrice()==null?null:newSnap.getPrice().doubleValue());
+        logRow.setContextJson(ctx);
+        alertLogRepository.save(logRow);
             logger.info("[Alert cid={}] PRICE-CHANGE recorded ASIN={} Old={} New={} Δ%={} titleOld='{}' titleNew='{}'", cid, asin.getAsin(), oldPrice, newPrice, changePercent.setScale(2, RoundingMode.HALF_UP), truncate(last.getTitle()), truncate(newSnap.getTitle()));
 
             dingTalkPusher.pushText("价格变动告警: " + asin.getNicknameOrAsin(),
@@ -121,6 +142,18 @@ public class AlertService {
         if (newValue != null && !Objects.equals(oldValue, newValue)) {
             ChangeAlert alert = new ChangeAlert(asin.getId(), alertType, oldValue, newValue);
             changeAlertRepository.save(alert);
+            AlertLog logRow = new AlertLog();
+            logRow.setAsinId(asin.getId());
+            logRow.setAsinCode(asin.getAsin());
+            logRow.setSite(asin.getSite());
+            logRow.setAlertType(alertType);
+            logRow.setOldValue(oldValue);
+            logRow.setNewValue(newValue);
+            logRow.setMessage(alertType + " 变更");
+            // 统一上下文字段：field 变更结构化 JSON
+            String ctx = buildContextJson(asin.getAsin(), alertType, oldValue, newValue, null, null);
+            logRow.setContextJson(ctx);
+            alertLogRepository.save(logRow);
             logger.info("[Alert cid={}] {} CHANGE recorded ASIN={} Old='{}' New='{}'", cid, alertType, asin.getAsin(), truncate(oldValue), truncate(newValue));
 
             String message = String.format("ASIN: %s\n", asin.getAsin()) + String.format(dingTalkFormat, oldValue, newValue);
@@ -134,4 +167,23 @@ public class AlertService {
         return s.length() <= 60 ? s : s.substring(0,57) + "...";
     }
     private Integer lengthOrNull(String s) { return s == null ? null : s.length(); }
+    private String safe(String s) { return s == null ? "" : s; }
+    private String quote(String s) { return "\"" + s.replace("\"","\\\"") + "\""; }
+
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private String buildContextJson(String asin, String field, String oldVal, String newVal, Double oldPrice, Double newPrice) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("asin", asin);
+        if (field != null) map.put("field", field);
+        if (oldVal != null) map.put("oldValue", oldVal);
+        if (newVal != null) map.put("newValue", newVal);
+        if (oldPrice != null) map.put("oldPrice", oldPrice);
+        if (newPrice != null) map.put("newPrice", newPrice);
+        try {
+            return OBJECT_MAPPER.writeValueAsString(map);
+        } catch (JsonProcessingException e) {
+            logger.warn("buildContextJson serialization failed, fallback to map.toString() asin={} field={}", asin, field);
+            return map.toString();
+        }
+    }
 }

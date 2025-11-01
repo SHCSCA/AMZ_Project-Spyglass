@@ -8,6 +8,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -37,6 +39,7 @@ import java.util.stream.Collectors;
 @Tag(name = "ASIN 数据查询", description = "提供查询指定 ASIN 历史抓取数据的功能")
 public class AsinHistoryController {
 
+    private static final Logger log = LoggerFactory.getLogger(AsinHistoryController.class);
     private final AsinHistoryRepository asinHistoryRepository;
 
     public AsinHistoryController(AsinHistoryRepository asinHistoryRepository) {
@@ -63,9 +66,11 @@ public class AsinHistoryController {
             @Parameter(description = "要查询的 ASIN 的唯一 ID", required = true, example = "1") @PathVariable("id") Long asinId,
             @Parameter(description = "查询的时间范围，例如 '7d' (7天), '30d' (30天), '3m' (3个月)。默认为 30 天。", example = "30d")
             @RequestParam(value = "range", defaultValue = "30d") String range) {
+        log.info("Request for history for ASIN ID: {}, range: {}", asinId, range);
 
         Instant since = parseRange(range);
         List<AsinHistoryModel> rows = asinHistoryRepository.findByAsinIdAndSnapshotAtAfterOrderBySnapshotAtDesc(asinId, since);
+        log.info("Found {} history records for ASIN ID: {}", rows.size(), asinId);
         return rows.stream().map(this::toDto).collect(Collectors.toList());
     }
 
@@ -83,6 +88,7 @@ public class AsinHistoryController {
                 default: return Instant.now().minus(30, ChronoUnit.DAYS);
             }
         } catch (Exception e) {
+            log.warn("Invalid range '{}' provided, defaulting to 30 days. Error: {}", range, e.getMessage());
             return Instant.now().minus(30, ChronoUnit.DAYS);
         }
     }

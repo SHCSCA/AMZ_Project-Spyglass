@@ -105,31 +105,6 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Spring Boot Testcontainers 支持，用 @ServiceConnection 自动注入容器连接 -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-testcontainers</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <!-- Testcontainers MySQL 用于真实数据库集成测试 -->
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>mysql</artifactId>
-            <version>1.19.7</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <version>1.19.7</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <!-- 测试时使用的内存数据库 H2，避免单元测试依赖外部 Postgres -->
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <scope>test</scope>
-        </dependency>
         <!-- Selenium omitted from runtime skeleton; add when needed -->
         <!-- Spring Retry：用于任务重试机制 -->
         <dependency>

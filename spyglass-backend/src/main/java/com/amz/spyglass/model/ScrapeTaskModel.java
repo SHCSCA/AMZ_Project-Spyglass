@@ -24,12 +24,6 @@ public class ScrapeTaskModel extends BaseEntityModel {
     /**
      * 任务状态枚举
      */
-    public enum TaskStatus {
-        PENDING,    // 等待执行
-        RUNNING,    // 执行中
-        SUCCESS,    // 执行成功
-        FAILED      // 执行失败
-    }
 
     /**
      * 主键ID
@@ -47,9 +41,16 @@ public class ScrapeTaskModel extends BaseEntityModel {
     /**
      * 任务状态，默认为等待执行
      */
-    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
-    private TaskStatus status = TaskStatus.PENDING;
+    private String status = TaskStatusConstants.PENDING;
+
+    public static final class TaskStatusConstants {
+        public static final String PENDING = "PENDING";
+        public static final String RUNNING = "RUNNING";
+        public static final String SUCCESS = "SUCCESS";
+        public static final String FAILED = "FAILED";
+        private TaskStatusConstants() {}
+    }
 
     /**
      * 执行结果消息，可以包含错误信息或执行日志

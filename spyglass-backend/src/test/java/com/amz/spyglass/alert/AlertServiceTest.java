@@ -5,6 +5,7 @@ import com.amz.spyglass.model.AsinHistoryModel;
 import com.amz.spyglass.repository.AsinHistoryRepository;
 import com.amz.spyglass.repository.alert.ChangeAlertRepository;
 import com.amz.spyglass.repository.alert.PriceAlertRepository;
+import com.amz.spyglass.repository.alert.AlertLogRepository;
 import com.amz.spyglass.scraper.AsinSnapshotDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,7 @@ public class AlertServiceTest {
     private PriceAlertRepository priceAlertRepo;
     private ChangeAlertRepository changeAlertRepo;
     private AlertService alertService;
+    private AlertLogRepository alertLogRepository;
     private AsinModel asin;
     private AsinHistoryModel lastHistory;
 
@@ -33,9 +35,10 @@ public class AlertServiceTest {
     void setUp() {
         historyRepo = Mockito.mock(AsinHistoryRepository.class);
         pusher = Mockito.mock(DingTalkPusher.class);
-        priceAlertRepo = Mockito.mock(PriceAlertRepository.class);
+    priceAlertRepo = Mockito.mock(PriceAlertRepository.class);
         changeAlertRepo = Mockito.mock(ChangeAlertRepository.class);
-        alertService = new AlertService(historyRepo, pusher, priceAlertRepo, changeAlertRepo);
+    alertLogRepository = Mockito.mock(AlertLogRepository.class);
+    alertService = new AlertService(historyRepo, pusher, priceAlertRepo, changeAlertRepo, alertLogRepository);
 
         asin = new AsinModel();
         asin.setId(1L);
