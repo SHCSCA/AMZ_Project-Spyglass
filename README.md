@@ -165,6 +165,34 @@ curl 'http://localhost:8080/api/asin/1/reviews?rating=negative&page=0&size=50'
 | `GET /api/asin/{id}/reviews` | `rating=negative` / `page` / `size` | 负面评论过滤（1-3 星）与分页 |
 | `GET /api/asin/{id}/alerts` | `page` / `size` / `type` / `from` / `to` | 指定 ASIN 告警分页 + 类型与时间范围过滤 |
 
+### 统一分页响应结构 (PageResponse)
+所有支持分页的端点统一返回如下 JSON 结构（字段含义）：
+
+```json
+{
+	"items": [ /* 当前页数据数组 */ ],
+	"total": 1234,              // 符合条件的总记录数
+	"page": 0,                  // 当前页码 (从0开始)
+	"size": 50,                 // 每页请求的大小
+	"totalPages": 25,           // 总页数 (基于 total 与 size 计算)
+	"hasNext": true,            // 是否还有下一页 (page < totalPages-1)
+	"hasPrevious": false        // 是否有上一页 (page > 0)
+}
+```
+
+前端分页建议：
+1. 使用 `hasNext` 与 `hasPrevious` 控制翻页按钮禁用状态。
+2. 若需要“跳页”功能，使用 `totalPages` 生成页码选择器；大数据量时改为“输入页码 + Go”。
+3. 若 `size` 可变，切换 size 后应重置 `page=0` 以避免越界。
+4. 当 `total` 很大（> 10w）且需要深翻页，可改造后端为基于游标的分页（未来 Roadmap 可选）。
+
+示例（获取某 ASIN 历史记录页）：
+
+```bash
+curl 'http://localhost:8080/api/asin/1/history?range=30d&page=0&size=100' | jq '.total,.totalPages,.hasNext'
+```
+
+
 ### 使用外部数据库的注意事项
 * 需要确保应用容器能够访问外部 MySQL（安全组 / 防火墙开放 3306）。
 * 建议为生产环境开启只读账号与最小权限策略。
