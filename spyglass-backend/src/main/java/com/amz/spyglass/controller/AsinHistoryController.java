@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Collectors;
+import com.amz.spyglass.dto.PageResponse;
 
 /**
  * ASIN 商品历史数据控制器
@@ -67,7 +68,7 @@ public class AsinHistoryController {
             @ApiResponse(responseCode = "200", description = "查询成功", content = @Content(array = @ArraySchema(schema = @Schema(implementation = AsinHistoryResponse.class)))),
             @ApiResponse(responseCode = "400", description = "时间格式错误")
         })
-    public List<AsinHistoryResponse> history(
+    public PageResponse<AsinHistoryResponse> history(
             @Parameter(description = "要查询的 ASIN 的唯一 ID", required = true, example = "1") @PathVariable("id") Long asinId,
             @Parameter(description = "查询的时间范围，例如 '7d' (7天), '30d' (30天), '3m' (3个月)。默认为 30 天。", example = "30d")
             @RequestParam(value = "range", defaultValue = "30d") String range,
@@ -75,10 +76,17 @@ public class AsinHistoryController {
             @Parameter(description = "每页条数", example = "200") @RequestParam(defaultValue = "200") int size) {
         log.info("Request history asinId={}, range={}, page={}, size={}", asinId, range, page, size);
         Instant since = parseRange(range);
-        List<AsinHistoryModel> rows = asinHistoryRepository.findByAsinIdAndSnapshotAtAfterOrderBySnapshotAtDesc(asinId, since)
-                .stream().skip((long) page * size).limit(size).collect(Collectors.toList());
-        log.info("Found {} history records (paged) for ASIN ID: {}", rows.size(), asinId);
-        return rows.stream().map(this::toDto).collect(Collectors.toList());
+    // TODO: 可在 Repository 添加分页查询以避免内存截取
+    List<AsinHistoryModel> all = asinHistoryRepository.findByAsinIdAndSnapshotAtAfterOrderBySnapshotAtDesc(asinId, since);
+    List<AsinHistoryModel> sliced = all.stream().skip((long) page * size).limit(size).collect(Collectors.toList());
+    List<AsinHistoryResponse> items = sliced.stream().map(this::toDto).collect(Collectors.toList());
+    PageResponse<AsinHistoryResponse> resp = new PageResponse<>();
+    resp.setItems(items);
+    resp.setTotal(all.size());
+    resp.setPage(page);
+    resp.setSize(size);
+    log.info("Found {} history records (paged) for ASIN ID: {} (total={})", items.size(), asinId, all.size());
+    return resp;
     }
 
     private Instant parseRange(String range) {

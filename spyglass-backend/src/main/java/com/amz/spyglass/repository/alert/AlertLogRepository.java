@@ -10,4 +10,5 @@ import org.springframework.stereotype.Repository;
 public interface AlertLogRepository extends JpaRepository<AlertLog, Long> {
 	Page<AlertLog> findByAsinId(Long asinId, Pageable pageable);
 	Page<AlertLog> findByAlertTypeIgnoreCase(String alertType, Pageable pageable);
+	Page<AlertLog> findByAsinIdAndAlertAtBetween(Long asinId, java.time.Instant start, java.time.Instant end, Pageable pageable);
 }

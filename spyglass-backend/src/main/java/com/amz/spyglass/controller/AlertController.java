@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.stream.Collectors;
+import com.amz.spyglass.dto.PageResponse;
 
 @RestController
 @RequestMapping("/api/alerts")
@@ -36,16 +37,23 @@ public class AlertController {
         responses = {
             @ApiResponse(responseCode = "200", description = "查询成功", content = @Content(array = @ArraySchema(schema = @Schema(implementation = AlertLogResponse.class))))
         })
-    public List<AlertLogResponse> latest(
+    public PageResponse<AlertLogResponse> latest(
         @Parameter(description = "页码 (从0开始)", example = "0") @RequestParam(defaultValue = "0") int page,
         @Parameter(description = "每页条数", example = "50") @RequestParam(defaultValue = "50") int size,
         @Parameter(description = "告警类型过滤", example = "PRICE_CHANGE") @RequestParam(name = "type", required = false) String type,
         @Parameter(description = "告警状态过滤（预留，当前忽略）", example = "NEW") @RequestParam(name = "status", required = false) String status) {
     log.info("Query alerts page={}, size={}, type={}, status={}", page, size, type, status);
-    List<AlertLog> pageData = alertLogRepository.findAll(PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "alertAt"))).getContent();
-    return pageData.stream()
+    var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "alertAt"));
+    var pageResult = alertLogRepository.findAll(pageable);
+    var filtered = pageResult.getContent().stream()
         .filter(a -> type == null || type.equalsIgnoreCase(a.getAlertType()))
         .map(this::toDto).collect(Collectors.toList());
+    PageResponse<AlertLogResponse> resp = new PageResponse<>();
+    resp.setItems(filtered);
+    resp.setTotal(pageResult.getTotalElements());
+    resp.setPage(page);
+    resp.setSize(size);
+    return resp;
     }
 
     private AlertLogResponse toDto(AlertLog e) {

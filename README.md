@@ -163,6 +163,7 @@ curl 'http://localhost:8080/api/asin/1/reviews?rating=negative&page=0&size=50'
 | `GET /api/asin/{id}/history` | `range` / `page` / `size` | 时间范围与分页（历史数据内部按 snapshotAt DESC）|
 | `GET /api/alerts` | `page` / `size` / `type` | 最新告警分页，可按类型过滤 |
 | `GET /api/asin/{id}/reviews` | `rating=negative` / `page` / `size` | 负面评论过滤（1-3 星）与分页 |
+| `GET /api/asin/{id}/alerts` | `page` / `size` / `type` / `from` / `to` | 指定 ASIN 告警分页 + 类型与时间范围过滤 |
 
 ### 使用外部数据库的注意事项
 * 需要确保应用容器能够访问外部 MySQL（安全组 / 防火墙开放 3306）。

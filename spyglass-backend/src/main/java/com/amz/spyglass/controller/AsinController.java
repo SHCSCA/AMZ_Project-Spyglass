@@ -20,6 +20,9 @@ import jakarta.validation.Valid;
 import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
+import com.amz.spyglass.dto.PageResponse;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 /**
  * ASIN商品管理REST控制器
@@ -66,13 +69,20 @@ public class AsinController {
         responses = {
             @ApiResponse(responseCode = "200", description = "成功获取列表", content = @Content(array = @ArraySchema(schema = @Schema(implementation = AsinResponse.class))))
         })
-    public List<AsinResponse> list(
+    public PageResponse<AsinResponse> list(
             @Parameter(description = "页码 (从0开始)", example = "0") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "每页条数", example = "50") @RequestParam(defaultValue = "50") int size) {
         log.info("Request to list ASINs page={}, size={}", page, size);
-        List<AsinModel> asins = asinRepository.findAll(PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"))).getContent();
-        log.info("Found {} ASINs in page {}", asins.size(), page);
-        return asins.stream().map(this::toResponse).collect(Collectors.toList());
+    PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+    var pageResult = asinRepository.findAll(pageable);
+    List<AsinResponse> items = pageResult.getContent().stream().map(this::toResponse).collect(Collectors.toList());
+        PageResponse<AsinResponse> resp = new PageResponse<>();
+        resp.setItems(items);
+        resp.setTotal(pageResult.getTotalElements());
+        resp.setPage(page);
+        resp.setSize(size);
+        log.info("Found {} ASINs (total {} records) in page {}", items.size(), resp.getTotal(), page);
+        return resp;
     }
 
     /**
