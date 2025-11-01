@@ -59,9 +59,11 @@ public class AsinHistoryController {
      * @return 历史记录列表（按时间倒序）
      */
     @GetMapping("/{id}/history")
-    @Operation(summary = "获取指定 ASIN 的历史数据", description = "根据 ASIN 的唯一 ID，查询其在特定时间范围内的历史抓取快照，按时间降序排列。")
-    @ApiResponse(responseCode = "200", description = "成功获取历史数据")
-    @ApiResponse(responseCode = "404", description = "未找到指定 ID 的 ASIN")
+    @Operation(summary = "查询指定 ASIN 的抓取历史", description = "支持通过开始/结束时间过滤，时间格式为 ISO-8601。",
+        responses = {
+            @ApiResponse(responseCode = "200", description = "查询成功", content = @Content(array = @ArraySchema(schema = @Schema(implementation = AsinHistoryResponse.class)))),
+            @ApiResponse(responseCode = "400", description = "时间格式错误")
+        })
     public List<AsinHistoryResponse> history(
             @Parameter(description = "要查询的 ASIN 的唯一 ID", required = true, example = "1") @PathVariable("id") Long asinId,
             @Parameter(description = "查询的时间范围，例如 '7d' (7天), '30d' (30天), '3m' (3个月)。默认为 30 天。", example = "30d")

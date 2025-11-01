@@ -1,10 +1,49 @@
-version: "3.8"
 services:
+  mysql:
+    image: mysql:8.0
+    container_name: spyglass-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:rootpwd}
+      MYSQL_DATABASE: ${DB_NAME:amzspaglass}
+      MYSQL_USER: ${DB_USER:amzspaglass}
+      MYSQL_PASSWORD: ${DB_PASSWORD:RYna5tjK7nKwZd7J}
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
   app:
     build:
       context: ./spyglass-backend
+    container_name: spyglass-app
+    restart: always
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:amzspaglass}
+      DB_USER: ${DB_USER:amzspaglass}
+      DB_PASSWORD: ${DB_PASSWORD:RYna5tjK7nKwZd7J}
+      SCRAPER_FIXED_DELAY_MS: ${SCRAPER_FIXED_DELAY_MS:14400000}
+      TZ: Asia/Shanghai
+      JAVA_TOOL_OPTIONS: "-XX:+UseG1GC -XX:MaxRAMPercentage=75 -Duser.timezone=Asia/Shanghai"
     ports:
       - "8080:8080"
-    # The application will now use the datasource configuration from its internal application.yml
-    # Make sure your application.yml is correctly configured to connect to the external database.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  db_data:
 

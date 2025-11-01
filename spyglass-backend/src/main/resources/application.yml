@@ -9,6 +9,8 @@ spring:
       ddl-auto: update
     properties:
       hibernate:
+    application:
+      name: spyglass-backend
         dialect: org.hibernate.dialect.MySQL8Dialect
   flyway:
     enabled: false
@@ -20,6 +22,14 @@ server:
 logging:
   config: classpath:logback-spring.xml
 
+  management:
+    endpoints:
+      web:
+        exposure:
+          include: health,info
+    endpoint:
+      health:
+        show-details: never
 
 # Spring Doc OpenAPI 配置
 springdoc:

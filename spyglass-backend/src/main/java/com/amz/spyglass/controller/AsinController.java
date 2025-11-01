@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,8 +62,10 @@ public class AsinController {
      * @return 监控商品列表（DTO格式）
      */
     @GetMapping
-    @Operation(summary = "获取所有监控的 ASIN 列表", description = "返回一个包含所有已添加 ASIN 简要信息的列表。")
-    @ApiResponse(responseCode = "200", description = "成功获取列表")
+    @Operation(summary = "获取所有监控的 ASIN 列表", description = "返回一个包含所有已添加 ASIN 简要信息的列表。",
+        responses = {
+            @ApiResponse(responseCode = "200", description = "成功获取列表", content = @Content(array = @ArraySchema(schema = @Schema(implementation = AsinResponse.class))))
+        })
     public List<AsinResponse> list() {
         log.info("Request to list all ASINs");
         List<AsinModel> asins = asinRepository.findAll();
@@ -82,9 +85,11 @@ public class AsinController {
      * @return 创建成功的商品监控信息
      */
     @PostMapping
-    @Operation(summary = "添加一个新的 ASIN 进行监控", description = "根据传入的 ASIN、站点等信息，创建一个新的监控任务。")
-    @ApiResponse(responseCode = "200", description = "ASIN 创建成功", content = @Content(schema = @Schema(implementation = AsinResponse.class)))
-    @ApiResponse(responseCode = "400", description = "请求参数无效（例如ASIN为空或格式错误）")
+    @Operation(summary = "添加一个新的 ASIN 进行监控", description = "根据传入的 ASIN、站点等信息，创建一个新的监控任务。",
+        responses = {
+            @ApiResponse(responseCode = "200", description = "ASIN 创建成功", content = @Content(schema = @Schema(implementation = AsinResponse.class))),
+            @ApiResponse(responseCode = "400", description = "请求参数无效（例如ASIN为空或格式错误）")
+        })
     public ResponseEntity<AsinResponse> create(@Valid @RequestBody AsinRequest req) {
         log.info("Request to create ASIN: {}", req);
         AsinModel a = new AsinModel();
@@ -109,9 +114,11 @@ public class AsinController {
      * @return HTTP 204 No Content
      */
     @DeleteMapping("/{id}")
-    @Operation(summary = "删除一个 ASIN", description = "根据提供的主键 ID 删除一个 ASIN 及其相关的监控任务。")
-    @ApiResponse(responseCode = "204", description = "删除成功")
-    @ApiResponse(responseCode = "404", description = "未找到指定 ID 的 ASIN")
+    @Operation(summary = "删除一个 ASIN", description = "根据提供的主键 ID 删除一个 ASIN 及其相关的监控任务。",
+        responses = {
+            @ApiResponse(responseCode = "204", description = "删除成功"),
+            @ApiResponse(responseCode = "404", description = "未找到指定 ID 的 ASIN")
+        })
     public ResponseEntity<Void> delete(
             @Parameter(description = "要删除的 ASIN 的唯一 ID", required = true, example = "1") @PathVariable Long id) {
         log.info("Request to delete ASIN with ID: {}", id);
@@ -125,9 +132,11 @@ public class AsinController {
     }
 
     @PutMapping("/{id}/config")
-    @Operation(summary = "更新指定 ASIN 的配置", description = "允许更新一个已存在 ASIN 的昵称、库存阈值等配置信息。")
-    @ApiResponse(responseCode = "200", description = "更新成功", content = @Content(schema = @Schema(implementation = AsinResponse.class)))
-    @ApiResponse(responseCode = "404", description = "未找到指定 ID 的 ASIN")
+    @Operation(summary = "更新指定 ASIN 的配置", description = "允许更新一个已存在 ASIN 的昵称、库存阈值等配置信息。",
+        responses = {
+            @ApiResponse(responseCode = "200", description = "更新成功", content = @Content(schema = @Schema(implementation = AsinResponse.class))),
+            @ApiResponse(responseCode = "404", description = "未找到指定 ID 的 ASIN")
+        })
     public ResponseEntity<AsinResponse> updateConfig(
             @Parameter(description = "要更新的 ASIN 的唯一 ID", required = true, example = "1") @PathVariable Long id,
             @RequestBody AsinRequest req) {
