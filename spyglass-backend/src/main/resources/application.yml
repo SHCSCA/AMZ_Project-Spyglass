@@ -11,7 +11,8 @@ spring:
       ddl-auto: update
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.MySQL8Dialect
+        # dialect: org.hibernate.dialect.MySQLDialect  # 已弃用MySQL8Dialect，保持注释让Hibernate自动检测
+    open-in-view: false # 关闭 Open-In-View 以避免在视图渲染阶段执行懒加载查询
   flyway:
     enabled: false
 
@@ -22,14 +23,15 @@ server:
 logging:
   config: classpath:logback-spring.xml
 
-  management:
-    endpoints:
-      web:
-        exposure:
-          include: health,info
-    endpoint:
-      health:
-        show-details: never
+# Actuator 管理端点配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
 
 # Spring Doc OpenAPI 配置
 springdoc:

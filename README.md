@@ -113,6 +113,11 @@ mvn -DskipTests spring-boot:run
 | `PROXY_HOST` / `PROXY_PORT` | `proxy.provider.com` / `12345` | 代理服务器 |
 | `PROXY_USER` / `PROXY_PASS` | `user123` / `pass123` | 代理认证（所有请求经此） |
 | `DINGTALK_WEBHOOK` | `https://oapi.dingtalk.com/robot/send?...` | 钉钉告警推送（可选） |
+| `PORT` | `8081` | 后端监听端口（`server.port`），可覆盖默认 8081 |
+
+> 端口说明：应用内使用 `server.port: ${PORT:8081}`，因此在 Docker/部署平台设置 `PORT=9090` 即可改为 9090，无需修改代码或重新打包。健康检查与文档中的所有示例也需同步调整。
+
+> Hibernate 方言说明：已移除显式 `MySQL8Dialect`（Hibernate 6 中被弃用），现在由 Hibernate 自动检测 MySQL 版本；如需显式指定可使用 `org.hibernate.dialect.MySQLDialect`。
 
 ### 运行日志与转储
 * 运行日志：`spyglass.log`（或 stdout，取决于 Logback 配置）。
