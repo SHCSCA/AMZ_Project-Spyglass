@@ -85,11 +85,11 @@ docker compose --env-file .env up --build -d
 ```
 5. 验证：
 ```
-curl -fsS http://localhost:8080/actuator/health
-curl -fsS http://localhost:8080/v3/api-docs | head -n 20
+curl -fsS http://localhost:8081/actuator/health
+curl -fsS http://localhost:8081/v3/api-docs | head -n 20
 ```
 启动后：
-* 后端：`http://localhost:8080`
+* 后端：`http://localhost:8081`
 * OpenAPI：`/swagger-ui/index.html` / `/v3/api-docs`
 * 健康检查：`/actuator/health`
 
@@ -134,27 +134,27 @@ mvn -DskipTests spring-boot:run
 ### 示例：添加与查询 ASIN（分页）
 ```
 # 添加 ASIN
-curl -X POST http://localhost:8080/api/asin \
+curl -X POST http://localhost:8081/api/asin \
 	-H 'Content-Type: application/json' \
 	-d '{"asin":"B0TEST1234","site":"US","nickname":"Test Product","inventoryThreshold":20}'
 
 # 查询列表
-curl 'http://localhost:8080/api/asin?page=0&size=20'
+curl 'http://localhost:8081/api/asin?page=0&size=20'
 
 # 查询历史（最近30天，分页第0页）
-curl 'http://localhost:8080/api/asin/1/history?range=30d&page=0&size=100'
+curl 'http://localhost:8081/api/asin/1/history?range=30d&page=0&size=100'
 ```
 
 ### 示例：警报与差评（分页与过滤）
 ```
 # 获取最新警报
-curl 'http://localhost:8080/api/alerts?page=0&size=50&type=PRICE_CHANGE'
+curl 'http://localhost:8081/api/alerts?page=0&size=50&type=PRICE_CHANGE'
 
 # 获取某 ASIN 的警报
-curl http://localhost:8080/api/asin/1/alerts
+curl http://localhost:8081/api/asin/1/alerts
 
 # 获取某 ASIN 的差评（仅 1-3 星）
-curl 'http://localhost:8080/api/asin/1/reviews?rating=negative&page=0&size=50'
+curl 'http://localhost:8081/api/asin/1/reviews?rating=negative&page=0&size=50'
 
 ### 分页与查询参数说明
 | 端点 | 参数 | 说明 |
@@ -189,7 +189,7 @@ curl 'http://localhost:8080/api/asin/1/reviews?rating=negative&page=0&size=50'
 示例（获取某 ASIN 历史记录页）：
 
 ```bash
-curl 'http://localhost:8080/api/asin/1/history?range=30d&page=0&size=100' | jq '.total,.totalPages,.hasNext'
+curl 'http://localhost:8081/api/asin/1/history?range=30d&page=0&size=100' | jq '.total,.totalPages,.hasNext'
 ```
 
 ### 使用外部数据库的注意事项

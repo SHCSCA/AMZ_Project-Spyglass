@@ -1,4 +1,6 @@
 spring:
+  application:
+    name: spyglass-backend
   datasource:
     url: jdbc:mysql://${DB_HOST:shcamz.xyz}:${DB_PORT:3306}/${DB_NAME:amzspaglass}?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
     username: ${DB_USER:amzspaglass}
@@ -9,14 +11,12 @@ spring:
       ddl-auto: update
     properties:
       hibernate:
-    application:
-      name: spyglass-backend
         dialect: org.hibernate.dialect.MySQL8Dialect
   flyway:
     enabled: false
 
 server:
-  port: ${PORT:8080}
+  port: ${PORT:8081}
 
 # Logging configuration
 logging:
