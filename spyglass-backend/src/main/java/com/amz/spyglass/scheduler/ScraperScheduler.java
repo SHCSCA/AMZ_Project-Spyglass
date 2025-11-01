@@ -79,8 +79,11 @@ public class ScraperScheduler {
         long start = System.currentTimeMillis();
         logger.info("========================================");
         logger.info("[Scheduler] 开始批量调度抓取任务 (fixedDelay={}ms)...", getConfiguredDelay());
-    java.util.List<AsinModel> all = asinRepository.findAll();
-        logger.info("[Scheduler] 准备调度 ASIN 总数: {}", all.size());
+        java.util.List<AsinModel> all = asinRepository.findAll();
+        int totalCount = all.size();
+        int submittedCount = 0;
+        int failedCount = 0;
+        logger.info("[Scheduler] 准备调度 ASIN 总数: {}", totalCount);
         for (AsinModel asin : all) {
             try {
                 logger.info("[Scheduler] 提交异步抓取任务 -> ASIN={}, Site={}, ID={}, Nickname={}", 

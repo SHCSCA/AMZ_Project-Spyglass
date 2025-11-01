@@ -30,7 +30,7 @@ springdoc:
 
 # 爬虫配置
 scraper:
-  fixedDelayMs: 3000 # 调度器轮询间隔（毫秒），3秒用于快速测试
+  fixedDelayMs: ${SCRAPER_FIXED_DELAY_MS:14400000} # 调度器轮询间隔（毫秒），默认4小时（生产）
   proxy:
     enabled: true
     providers:
