@@ -43,6 +43,7 @@ springdoc:
 # 爬虫配置
 scraper:
   fixedDelayMs: ${SCRAPER_FIXED_DELAY_MS:14400000} # 调度器轮询间隔（毫秒），默认4小时（生产）
+  initialDelayMs: ${SCRAPER_INITIAL_DELAY_MS:0} # 应用启动后首次批量调度的初始延迟（毫秒），默认0立即执行
   proxy:
     enabled: true
     providers:
