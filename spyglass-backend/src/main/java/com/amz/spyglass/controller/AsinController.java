@@ -4,6 +4,8 @@ import com.amz.spyglass.dto.AsinRequest;
 import com.amz.spyglass.dto.AsinResponse;
 import com.amz.spyglass.model.AsinModel;
 import com.amz.spyglass.repository.AsinRepository;
+import com.amz.spyglass.repository.AsinGroupRepository;
+import com.amz.spyglass.model.AsinGroupModel;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -51,9 +53,11 @@ public class AsinController {
 
     private static final Logger log = LoggerFactory.getLogger(AsinController.class);
     private final AsinRepository asinRepository;
+    private final AsinGroupRepository groupRepository;
 
-    public AsinController(AsinRepository asinRepository) {
+    public AsinController(AsinRepository asinRepository, AsinGroupRepository groupRepository) {
         this.asinRepository = asinRepository;
+        this.groupRepository = groupRepository;
     }
 
     /**
@@ -71,10 +75,13 @@ public class AsinController {
         })
     public PageResponse<AsinResponse> list(
             @Parameter(description = "页码 (从0开始)", example = "0") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "每页条数", example = "50") @RequestParam(defaultValue = "50") int size) {
-        log.info("Request to list ASINs page={}, size={}", page, size);
-    PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
-    var pageResult = asinRepository.findAll(pageable);
+            @Parameter(description = "每页条数", example = "50") @RequestParam(defaultValue = "50") int size,
+            @Parameter(description = "按分组ID过滤", example = "1") @RequestParam(required = false) Long groupId) {
+        log.info("Request to list ASINs page={}, size={}, groupId={}", page, size, groupId);
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
+    org.springframework.data.domain.Page<AsinModel> pageResult = (groupId == null)
+        ? asinRepository.findAll(pageable)
+        : asinRepository.findAllByGroupId(groupId, pageable);
     List<AsinResponse> items = pageResult.getContent().stream().map(this::toResponse).collect(Collectors.toList());
         PageResponse<AsinResponse> resp = new PageResponse<>();
         resp.setItems(items);
@@ -112,6 +119,11 @@ public class AsinController {
         a.setSite(req.getSite());
         a.setNickname(req.getNickname());
         a.setInventoryThreshold(req.getInventoryThreshold());
+        a.setBrand(req.getBrand());
+        if (req.getGroupId() != null) {
+            AsinGroupModel group = groupRepository.findById(req.getGroupId()).orElse(null);
+            a.setGroup(group);
+        }
         a.setCreatedAt(Instant.now());
         a.setUpdatedAt(Instant.now());
         AsinModel saved = asinRepository.save(a);
@@ -159,6 +171,13 @@ public class AsinController {
         return asinRepository.findById(id).map(a -> {
             a.setInventoryThreshold(req.getInventoryThreshold());
             a.setNickname(req.getNickname());
+            a.setBrand(req.getBrand());
+            if (req.getGroupId() != null) {
+                AsinGroupModel group = groupRepository.findById(req.getGroupId()).orElse(null);
+                a.setGroup(group);
+            } else {
+                a.setGroup(null);
+            }
             a.setSite(req.getSite());
             a.setUpdatedAt(Instant.now());
             AsinModel saved = asinRepository.save(a);
@@ -177,6 +196,11 @@ public class AsinController {
         r.setSite(a.getSite());
         r.setNickname(a.getNickname());
         r.setInventoryThreshold(a.getInventoryThreshold());
+        r.setBrand(a.getBrand());
+        if (a.getGroup() != null) {
+            r.setGroupId(a.getGroup().getId());
+            r.setGroupName(a.getGroup().getName());
+        }
         r.setCreatedAt(a.getCreatedAt());
         r.setUpdatedAt(a.getUpdatedAt());
         return r;

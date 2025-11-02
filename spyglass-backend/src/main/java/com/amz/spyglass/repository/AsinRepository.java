@@ -1,6 +1,8 @@
 package com.amz.spyglass.repository;
 
 import com.amz.spyglass.model.AsinModel;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 
@@ -15,4 +17,5 @@ import java.util.Optional;
 public interface AsinRepository extends JpaRepository<AsinModel, Long> {
     Optional<AsinModel> findByAsin(String asin);
     Optional<AsinModel> findByAsinAndSite(String asin, String site);
+    Page<AsinModel> findAllByGroupId(Long groupId, Pageable pageable);
 }

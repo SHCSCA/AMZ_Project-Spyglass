@@ -37,4 +37,14 @@ public class AsinRequest {
      */
     @NotNull(message = "库存预警阈值不能为空")
     private Integer inventoryThreshold;
+
+    /**
+     * 品牌（可选）
+     */
+    private String brand;
+
+    /**
+     * 所属分组ID（可选），前端选择已有分组时填入。
+     */
+    private Long groupId;
 }

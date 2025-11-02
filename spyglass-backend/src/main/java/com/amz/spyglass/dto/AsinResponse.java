@@ -39,6 +39,15 @@ public class AsinResponse {
      */
     private Integer inventoryThreshold;
 
+    /** 品牌 */
+    private String brand;
+
+    /** 分组ID（如果存在） */
+    private Long groupId;
+
+    /** 分组名称（便于前端直接展示） */
+    private String groupName;
+
     /**
      * 记录创建时间
      */
