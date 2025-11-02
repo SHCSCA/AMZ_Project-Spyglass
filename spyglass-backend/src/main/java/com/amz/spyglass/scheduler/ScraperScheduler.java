@@ -9,8 +9,8 @@ import com.amz.spyglass.model.ScrapeTaskModel;
 import com.amz.spyglass.repository.AsinRepository;
 import com.amz.spyglass.repository.ScrapeTaskRepository;
 import com.amz.spyglass.service.ScraperService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -32,10 +32,10 @@ import java.time.Instant;
 @Component
 @Profile("!test && !mysqltest") // 在 test 与 mysqltest 集成测试 profile 下不加载，避免初始与定时调度干扰计数
 @EnableRetry // 启用 Spring Retry，配合 @Retryable 注解使用
+@Slf4j
+@RequiredArgsConstructor
 public class ScraperScheduler {
 
-    private final Logger logger = LoggerFactory.getLogger(ScraperScheduler.class);
-    
     // ASIN 维护仓库：提供所有需要抓取的 ASIN 模型列表
     private final AsinRepository asinRepository;
     // 抓取服务：内部封装 Jsoup + Selenium 抓取与回退策略
@@ -45,14 +45,6 @@ public class ScraperScheduler {
     // 历史快照仓库：保存每次抓取后的数据点（用于后续对比与展示）
     private final com.amz.spyglass.repository.AsinHistoryRepository asinHistoryRepository;
     private final com.amz.spyglass.alert.AlertService alertService;
-
-    public ScraperScheduler(AsinRepository asinRepository, ScraperService scraperService, ScrapeTaskRepository scrapeTaskRepository, com.amz.spyglass.repository.AsinHistoryRepository asinHistoryRepository, com.amz.spyglass.alert.AlertService alertService) {
-        this.asinRepository = asinRepository;
-        this.scraperService = scraperService;
-        this.scrapeTaskRepository = scrapeTaskRepository;
-        this.asinHistoryRepository = asinHistoryRepository;
-        this.alertService = alertService;
-    }
 
         /**
      * 批量调度所有 ASIN 的抓取任务。
@@ -76,32 +68,32 @@ public class ScraperScheduler {
     @Scheduled(fixedDelayString = "${scraper.fixedDelayMs:14400000}", initialDelayString = "${scraper.initialDelayMs:0}")
     public void runAll() {
         long start = System.currentTimeMillis();
-        logger.info("========================================");
-        logger.info("[Scheduler] 开始批量调度抓取任务 (fixedDelay={}ms)...", getConfiguredDelay());
+    log.info("========================================");
+    log.info("[Scheduler] 开始批量调度抓取任务 (fixedDelay={}ms)...", getConfiguredDelay());
         java.util.List<AsinModel> all = asinRepository.findAll();
         int totalCount = all.size();
         int submittedCount = 0;
         int failedCount = 0;
-        logger.info("[Scheduler] 准备调度 ASIN 总数: {}", totalCount);
+    log.info("[Scheduler] 准备调度 ASIN 总数: {}", totalCount);
         for (AsinModel asin : all) {
             try {
-                logger.info("[Scheduler] 提交异步抓取任务 -> ASIN={}, Site={}, ID={}, Nickname={}", 
+                log.info("[Scheduler] 提交异步抓取任务 -> ASIN={}, Site={}, ID={}, Nickname={}", 
                     asin.getAsin(), asin.getSite(), asin.getId(), asin.getNickname());
                 runForAsinAsync(asin.getId());
                 submittedCount++;
             } catch (Exception ex) {
                 failedCount++;
-                logger.error("[Scheduler] 提交异步抓取失败 ASIN={} (Site={}, ID={}) : {}", 
+                log.error("[Scheduler] 提交异步抓取失败 ASIN={} (Site={}, ID={}) : {}", 
                     asin.getAsin(), asin.getSite(), asin.getId(), ex.getMessage(), ex);
             }
         }
         
         long duration = System.currentTimeMillis() - start;
-        logger.info("========================================");
-        logger.info("[Scheduler] 批量调度完成");
-        logger.info("[Scheduler] 总数: {}, 已提交: {}, 提交失败: {}, 耗时: {} ms", 
+    log.info("========================================");
+    log.info("[Scheduler] 批量调度完成");
+    log.info("[Scheduler] 总数: {}, 已提交: {}, 提交失败: {}, 耗时: {} ms", 
             totalCount, submittedCount, failedCount, duration);
-        logger.info("========================================");
+    log.info("========================================");
     }
 
     /**
@@ -141,7 +133,7 @@ public class ScraperScheduler {
         int previousRetries = Optional.ofNullable(scrapeTaskRepository.findFirstByAsinIdOrderByCreatedAtDesc(asinId))
             .map(ScrapeTaskModel::getRetryCount)
             .orElse(0);
-        logger.info("[Task] 开始抓取 ASIN_ID={} (历史重试次数={})", asinId, previousRetries);
+    log.info("[Task] 开始抓取 ASIN_ID={} (历史重试次数={})", asinId, previousRetries);
 
         // 初始化任务记录
         ScrapeTaskModel task = new ScrapeTaskModel();
@@ -155,11 +147,11 @@ public class ScraperScheduler {
             // 加载 ASIN 模型（若不存在抛出异常交由重试处理）
             AsinModel asinModel = asinRepository.findById(asinId).orElseThrow(() -> new IllegalStateException("ASIN 不存在: " + asinId));
             String targetUrl = "https://www.amazon.com/dp/" + asinModel.getAsin();
-            logger.debug("[Task] 开始抓取 URL={} ASIN={} ", targetUrl, asinModel.getAsin());
+            log.debug("[Task] 开始抓取 URL={} ASIN={} ", targetUrl, asinModel.getAsin());
 
             // 调用抓取服务（内部包含 Jsoup + Selenium 回退策略），返回聚合的快照 DTO
             com.amz.spyglass.scraper.AsinSnapshotDTO snap = scraperService.fetchSnapshot(targetUrl);
-            logger.debug("[Task] 抓取完成 ASIN={} 字段摘要: title='{}', price={}, bsr={}, inventory={}, imageMd5={}, aplusMd5={}",
+            log.debug("[Task] 抓取完成 ASIN={} 字段摘要: title='{}', price={}, bsr={}, inventory={}, imageMd5={}, aplusMd5={}",
                 asinModel.getAsin(), truncate(snap.getTitle(), 60), snap.getPrice(), snap.getBsr(), snap.getInventory(), snap.getImageMd5(), snap.getAplusMd5());
 
             // 标记任务成功
@@ -167,26 +159,26 @@ public class ScraperScheduler {
             task.setMessage("title=" + (snap.getTitle() == null ? "" : truncate(snap.getTitle(), 80)));
             task.markFinished();
             scrapeTaskRepository.save(task);
-            logger.info("[Task] 成功完成抓取 ASIN_ID={} 耗时={}ms", asinId, (System.currentTimeMillis() - execStart));
+            log.info("[Task] 成功完成抓取 ASIN_ID={} 耗时={}ms", asinId, (System.currentTimeMillis() - execStart));
 
             // 写入历史快照（失败不影响主任务成功，仅记录警告）
             persistHistorySnapshot(asinModel, snap);
             // 触发告警对比
-            try { alertService.processAlerts(asinModel, snap); } catch (Exception e) { logger.warn("[Task] 告警触发失败 ASIN_ID={} msg={}", asinId, e.getMessage()); }
+            try { alertService.processAlerts(asinModel, snap); } catch (Exception e) { log.warn("[Task] 告警触发失败 ASIN_ID={} msg={}", asinId, e.getMessage()); }
 
         } catch (Exception ex) {
             // 发生异常，更新任务重试计数与状态
-            logger.error("[Task] 抓取失败 ASIN_ID={} 当前尝试序号={} 错误信息={}", asinId, previousRetries + 1, ex.getMessage(), ex);
+            log.error("[Task] 抓取失败 ASIN_ID={} 当前尝试序号={} 错误信息={}", asinId, previousRetries + 1, ex.getMessage(), ex);
             task.setRetryCount(previousRetries + 1);
             // 达到最大次数 -> 失败；否则置为 PENDING 由 Spring Retry 再次调用（下次进入方法会新增 RUNNING 记录）
             if (task.getRetryCount() >= 3) {
                 task.setStatus(ScrapeTaskModel.TaskStatusConstants.FAILED);
                 task.setMessage("最终失败: " + ex.getMessage());
-                logger.warn("[Task] ASIN_ID={} 达到最大重试次数 ({} 次) 标记为 FAILED", asinId, task.getRetryCount());
+                log.warn("[Task] ASIN_ID={} 达到最大重试次数 ({} 次) 标记为 FAILED", asinId, task.getRetryCount());
             } else {
                 task.setStatus(ScrapeTaskModel.TaskStatusConstants.PENDING);
                 task.setMessage("等待重试 (attempt=" + task.getRetryCount() + "/3) cause=" + ex.getMessage());
-                logger.info("[Task] ASIN_ID={} 标记为 PENDING, 将由 Spring Retry 在 1 小时后重试", asinId);
+                log.info("[Task] ASIN_ID={} 标记为 PENDING, 将由 Spring Retry 在 1 小时后重试", asinId);
             }
             task.markFinished();
             scrapeTaskRepository.save(task);
@@ -239,12 +231,12 @@ public class ScraperScheduler {
             h.setLatestNegativeReviewMd5(snap.getLatestNegativeReviewMd5());
             
             asinHistoryRepository.save(h);
-            logger.info("[History] 保存快照成功 ASIN={} 字段: price={}, bsr=#{}, reviews={}, rating={}, inventory={}", 
+            log.info("[History] 保存快照成功 ASIN={} 字段: price={}, bsr=#{}, reviews={}, rating={}, inventory={}", 
                 asinModel.getAsin(), h.getPrice(), h.getBsr(), h.getTotalReviews(), h.getAvgRating(), h.getInventory());
         } catch (Exception e) {
-            logger.warn("[History] 保存快照失败 ASIN={} 错误={}", asinModel.getAsin(), e.getMessage(), e);
+            log.warn("[History] 保存快照失败 ASIN={} 错误={}", asinModel.getAsin(), e.getMessage(), e);
         } finally {
-            logger.trace("[History] 保存操作耗时 {} ms", (System.currentTimeMillis() - start));
+            log.trace("[History] 保存操作耗时 {} ms", (System.currentTimeMillis() - start));
         }
     }
 
@@ -274,13 +266,13 @@ public class ScraperScheduler {
      */
     public int runForSpecificAsins(java.util.List<Long> asinIds) {
         if (asinIds == null || asinIds.isEmpty()) {
-            logger.warn("[Scheduler] 手动抓取请求为空，跳过");
+            log.warn("[Scheduler] 手动抓取请求为空，跳过");
             return 0;
         }
         
-        logger.info("========================================");
-        logger.info("[Scheduler] 手动触发指定 ASIN 抓取，数量: {}", asinIds.size());
-        logger.info("========================================");
+    log.info("========================================");
+    log.info("[Scheduler] 手动触发指定 ASIN 抓取，数量: {}", asinIds.size());
+    log.info("========================================");
         
         int submittedCount = 0;
         int failedCount = 0;
@@ -289,26 +281,26 @@ public class ScraperScheduler {
             try {
                 java.util.Optional<AsinModel> asinOpt = asinRepository.findById(asinId);
                 if (asinOpt.isEmpty()) {
-                    logger.warn("[Scheduler] ASIN ID={} 不存在，跳过", asinId);
+                    log.warn("[Scheduler] ASIN ID={} 不存在，跳过", asinId);
                     failedCount++;
                     continue;
                 }
                 
                 AsinModel asin = asinOpt.get();
-                logger.info("[Scheduler] 手动提交抓取任务 -> ASIN={}, Site={}, ID={}", 
+                log.info("[Scheduler] 手动提交抓取任务 -> ASIN={}, Site={}, ID={}", 
                     asin.getAsin(), asin.getSite(), asin.getId());
                 runForAsinAsync(asinId);
                 submittedCount++;
             } catch (Exception ex) {
                 failedCount++;
-                logger.error("[Scheduler] 手动提交抓取失败 ASIN_ID={} : {}", asinId, ex.getMessage(), ex);
+                log.error("[Scheduler] 手动提交抓取失败 ASIN_ID={} : {}", asinId, ex.getMessage(), ex);
             }
         }
         
-        logger.info("========================================");
-        logger.info("[Scheduler] 手动抓取提交完成 - 总数: {}, 成功: {}, 失败: {}", 
+    log.info("========================================");
+    log.info("[Scheduler] 手动抓取提交完成 - 总数: {}, 成功: {}, 失败: {}", 
             asinIds.size(), submittedCount, failedCount);
-        logger.info("========================================");
+    log.info("========================================");
         
         return submittedCount;
     }

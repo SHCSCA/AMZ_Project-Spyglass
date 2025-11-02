@@ -15,8 +15,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import jakarta.validation.Valid;
 import java.time.Instant;
@@ -49,16 +49,12 @@ import org.springframework.data.domain.Sort;
 @RestController
 @RequestMapping("/api/asin")
 @Tag(name = "ASIN 管理", description = "提供对监控的 ASIN 列表进行增、删、改、查的核心接口")
+@Slf4j
+@RequiredArgsConstructor
 public class AsinController {
 
-    private static final Logger log = LoggerFactory.getLogger(AsinController.class);
     private final AsinRepository asinRepository;
     private final AsinGroupRepository groupRepository;
-
-    public AsinController(AsinRepository asinRepository, AsinGroupRepository groupRepository) {
-        this.asinRepository = asinRepository;
-        this.groupRepository = groupRepository;
-    }
 
     /**
      * 获取所有监控中的ASIN商品列表

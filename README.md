@@ -232,6 +232,45 @@ curl 'http://localhost:8081/api/asin/1/history?range=30d&page=0&size=100' | jq '
 2. 维护 `asin_group.asin_count`（在新增/移除 ASIN 时更新）。
 3. 增加品牌过滤参数 `GET /api/asin?brand=xxx`。
 
+### 数据库结构与迁移策略（Schema Strategy）
+
+> TL;DR：生产环境请始终保留按版本递增的迁移文件（Flyway `V*.sql`），`schema_full_YYYY-MM-DD.sql` 仅作为“参考快照 / 全量初始化”用途，不能替代历史迁移，否则会丢失增量演进记录。
+
+当前项目采用“增量迁移 + 全量快照”双轨策略：
+
+| 文件类型 | 位置 | 用途 | 生产环境执行 | 回滚/审计价值 |
+| --- | --- | --- | --- | --- |
+| 增量迁移 (`V1.0.0__*.sql`) | `src/main/resources/db/migration/` | 每次模型演进最小变更集 | ✅（Flyway 自动） | ✅（精确定位变更） |
+| 全量快照 (`schema_full_2025-11-02.sql`) | `spyglass-backend/sql/` | 新环境一次性初始化 / 文档 | ⚠️（仅限空库一次性导入） | ❌（不含变更时间线） |
+
+使用建议：
+1. 本地或新测试环境：可直接执行最新 `schema_full_*.sql` 建库加速。后续继续使用增量迁移。  
+2. 生产环境：严禁删除旧版 `V*.sql`；新增字段/索引/表时继续追加新的 `Vx.y.z__desc.sql`。  
+3. 当迁移文件较多（>30）时，可考虑年终生成一个“归档快照”文件，仅用于文档或快速初始化，不纳入 Flyway baseline。  
+4. 回滚策略：通过 Git 历史恢复上一个迁移文件 + 手工补偿（例如：DROP COLUMN / DROP TABLE），避免直接替换为快照。  
+5. 审计与合规：保留增量迁移可在 CodeReview / 安全审计中逐条溯源每次结构变更的意图与日期。  
+
+索引策略当前最小化（仅 `idx_asin_group_id`），后续根据负载再添加：
+* 建议 `(group_id, brand)` 复合索引：在品牌+分组筛选高频时启用。  
+* 历史曲线查询优化：`asin_history (asin_id, snapshot_at)` 复合索引（已在性能建议中列出）。  
+* 告警与差评高频过滤：分别考虑 `alert_log (alert_type, alert_at)` 与 `review_alert (asin_id, rating)`。  
+
+字段 MD5 对比策略（用于内容变更告警）：
+| 领域 | 字段来源 | 对比方式 | 告警触发条件 |
+| --- | --- | --- | --- |
+| 主图 | `imageMd5` | 新旧 MD5 不同 | 生成 `CHANGE_IMAGE` 告警 |
+| A+ 区域 | `aplusMd5` | 新旧 MD5 不同 | 生成 `CHANGE_APLUS` 告警 |
+| 标题 | `title` (原文) | `MD5(title)` 变化 | 生成 `CHANGE_TITLE` |
+| 五点描述 | `bulletPoints` (拼接) | `MD5(concat)` 变化 | 生成 `CHANGE_BULLETS` |
+| 最新负面评论 | `latestNegativeReviewMd5` | 新旧 MD5 不同 | 生成 `NEW_NEGATIVE_REVIEW` |
+
+如需进一步压缩迁移数量，可使用：
+* Flyway Baseline：在引入已有历史库时设置 `flyway.baselineOnMigrate=true`。  
+* 合并副本策略：仅在“长期不再回滚”且完成审计后，将早期（例如 <V1.0.x）的多文件打包为单一 `baseline` 文件。  
+
+> 注意：本项目尚未启用 Flyway 自动执行（可在生产前开启）；合并迁移需谨慎，务必保留历史演进证据避免运维风险。
+
+
 ### 分组相关 API 示例
 
 创建分组：

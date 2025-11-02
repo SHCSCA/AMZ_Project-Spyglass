@@ -13,6 +13,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Page;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.Instant;
 import java.util.List;
@@ -21,15 +23,12 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/groups")
 @Tag(name = "ASIN 分组管理", description = "管理 ASIN 分组（创建、查询、查看分组下 ASIN 列表）")
+@Slf4j
+@RequiredArgsConstructor
 public class GroupController {
 
     private final AsinGroupRepository groupRepository;
     private final AsinRepository asinRepository;
-
-    public GroupController(AsinGroupRepository groupRepository, AsinRepository asinRepository) {
-        this.groupRepository = groupRepository;
-        this.asinRepository = asinRepository;
-    }
 
     @PostMapping
     @Operation(summary = "创建分组", description = "创建一个新的 ASIN 分组")
