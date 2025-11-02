@@ -113,6 +113,11 @@ mvn -DskipTests spring-boot:run
 | `PROXY_HOST` / `PROXY_PORT` | `proxy.provider.com` / `12345` | 代理服务器 |
 | `PROXY_USER` / `PROXY_PASS` | `user123` / `pass123` | 代理认证（所有请求经此） |
 | `DINGTALK_WEBHOOK` | `https://oapi.dingtalk.com/robot/send?...` | 钉钉告警推送（可选） |
+| `PORT` | `8081` | 后端监听端口（`server.port`），可覆盖默认 8081 |
+
+> 端口说明：应用内使用 `server.port: ${PORT:8081}`，因此在 Docker/部署平台设置 `PORT=9090` 即可改为 9090，无需修改代码或重新打包。健康检查与文档中的所有示例也需同步调整。
+
+> Hibernate 方言说明：已移除显式 `MySQL8Dialect`（Hibernate 6 中被弃用），现在由 Hibernate 自动检测 MySQL 版本；如需显式指定可使用 `org.hibernate.dialect.MySQLDialect`。
 
 ### 运行日志与转储
 * 运行日志：`spyglass.log`（或 stdout，取决于 Logback 配置）。
@@ -133,10 +138,10 @@ mvn -DskipTests spring-boot:run
 
 ### 示例：添加与查询 ASIN（分页）
 ```
-# 添加 ASIN
+# 添加 ASIN（新增 brand 与 groupId 可选字段）
 curl -X POST http://localhost:8081/api/asin \
 	-H 'Content-Type: application/json' \
-	-d '{"asin":"B0TEST1234","site":"US","nickname":"Test Product","inventoryThreshold":20}'
+	-d '{"asin":"B0TEST1234","site":"US","nickname":"Test Product","inventoryThreshold":20,"brand":"Sagenest","groupId":1}'
 
 # 查询列表
 curl 'http://localhost:8081/api/asin?page=0&size=20'
@@ -160,6 +165,8 @@ curl 'http://localhost:8081/api/asin/1/reviews?rating=negative&page=0&size=50'
 | 端点 | 参数 | 说明 |
 | --- | --- | --- |
 | `GET /api/asin` | `page` / `size` | ASIN 列表分页，按 id DESC 排序 |
+| `GET /api/asin` | `groupId` | 按分组过滤（仅返回指定分组下的 ASIN） |
+| `GET /api/asin` | （预留）`brand` | 未来可按品牌快速过滤（当前未实现，待场景明确） |
 | `GET /api/asin/{id}/history` | `range` / `page` / `size` | 时间范围与分页（历史数据内部按 snapshotAt DESC）|
 | `GET /api/alerts` | `page` / `size` / `type` | 最新告警分页，可按类型过滤 |
 | `GET /api/asin/{id}/reviews` | `rating=negative` / `page` / `size` | 负面评论过滤（1-3 星）与分页 |
@@ -204,6 +211,50 @@ curl 'http://localhost:8081/api/asin/1/history?range=30d&page=0&size=100' | jq '
 | 告警查询频繁 | 为 `alert_log(alert_type, alert_at)` 建索引 |
 | 差评查询频繁 | 为 `review_alert(asin_id, rating)` 建索引 |
 | 高并发 | 引入 Caffeine/Redis 缓存热点 ASIN 基础信息 |
+| 分组 + 品牌过滤频繁 | 视查询需要补充复合索引 `(group_id, brand)`（当前仅对 group_id 建索引，品牌未建索引避免过早优化） |
+
+### V1.1.0 迁移（分组与品牌）说明
+
+本版本新增了“分组（asin_group）”与“品牌（asin.brand）”能力，使同一自有产品的多个竞品可以聚合与区分：
+
+| 结构 | 新增字段/表 | 说明 |
+| --- | --- | --- |
+| 表 | `asin_group` | 分组元数据（名称、描述、asin_count 预留） |
+| 列 | `asin.brand` | 品牌字符串，便于区分同分组内不同品牌 |
+| 列 | `asin.group_id` | 外键引用分组，删除分组时自动置空 |
+| 约束 | `fk_asin_group` | ON DELETE SET NULL，避免误删 ASIN |
+| 索引 | `idx_asin_group_id` | 支持按分组分页与过滤 |
+
+迁移文件：`V1.1.0__asin_group_and_brand.sql`
+
+后续可选：
+1. 添加 `(group_id, brand)` 复合索引（当品牌过滤大幅增加时）。
+2. 维护 `asin_group.asin_count`（在新增/移除 ASIN 时更新）。
+3. 增加品牌过滤参数 `GET /api/asin?brand=xxx`。
+
+### 分组相关 API 示例
+
+创建分组：
+```bash
+curl -X POST http://localhost:8081/api/groups \
+	-H 'Content-Type: application/json' \
+	-d '{"name":"50寸L桌竞品","description":"与我家L桌直接竞争的同尺寸款"}'
+```
+
+查询分组列表（分页）：
+```bash
+curl 'http://localhost:8081/api/groups?page=0&size=20'
+```
+
+按分组查看 ASIN：
+```bash
+curl 'http://localhost:8081/api/groups/1/asins?page=0&size=50'
+```
+
+按分组过滤全局 ASIN 列表：
+```bash
+curl 'http://localhost:8081/api/asin?page=0&size=50&groupId=1'
+```
 
 
 ### 常见问题 (FAQ)

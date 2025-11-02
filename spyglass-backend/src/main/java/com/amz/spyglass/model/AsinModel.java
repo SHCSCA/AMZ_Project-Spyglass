@@ -49,6 +49,19 @@ public class AsinModel extends BaseEntityModel {
     private Integer inventoryThreshold;
 
     /**
+     * 品牌（例如："Sagenest"、"IKEA"），用于区分同一分组内不同品牌的竞品。
+     */
+    @Column(length = 128)
+    private String brand;
+
+    /**
+     * 所属分组（可选）：多个 ASIN 可以归属于同一个分组以表示“同一自有产品的竞品池”。
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "group_id")
+    private AsinGroupModel group;
+
+    /**
      * 获取用于显示的名称，优先使用昵称，否则返回ASIN
      * @return 显示名称
      */

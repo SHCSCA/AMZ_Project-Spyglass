@@ -15,7 +15,6 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.context.annotation.Profile;
-import jakarta.annotation.PostConstruct;
 
 import java.time.Instant;
 
@@ -74,7 +73,7 @@ public class ScraperScheduler {
      *  - 事务隔离：一个 ASIN 失败不会回滚其他 ASIN 的数据
      *  - 异常隔离：try-catch 确保单个失败不影响整体调度
      */
-    @Scheduled(fixedDelayString = "${scraper.fixedDelayMs:14400000}")
+    @Scheduled(fixedDelayString = "${scraper.fixedDelayMs:14400000}", initialDelayString = "${scraper.initialDelayMs:0}")
     public void runAll() {
         long start = System.currentTimeMillis();
         logger.info("========================================");
@@ -265,18 +264,6 @@ public class ScraperScheduler {
         return input.length() <= maxLen ? input : input.substring(0, maxLen) + "...";
     }
 
-    /**
-     * 应用启动后立即触发一次初始抓取任务
-     */
-    @PostConstruct
-    public void initialKickoff() {
-        try {
-            logger.info("[Scheduler] 应用启动后立即触发一次初始抓取任务");
-            runAll();
-        } catch (Exception e) {
-            logger.warn("[Scheduler] 初始抓取失败 msg={}", e.getMessage());
-        }
-    }
 
     /**
      * 手动触发指定 ASIN 列表的抓取任务
