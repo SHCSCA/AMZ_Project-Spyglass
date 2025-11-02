@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.math.BigDecimal;
 
 /**
  * DebugController: 仅用于本地/验收环境手动触发抓取与制造告警场景。
@@ -52,5 +53,41 @@ public class DebugController {
         historyRepository.save(h);
         log.info("[Debug] 强制修改历史标题 asinId={} old='{}' new='{}'", asinId, original, h.getTitle());
         return ResponseEntity.ok("mutated from '" + original + "' to '" + h.getTitle() + "'");
+    }
+
+    /**
+     * 修改最新一条历史记录的价格（制造价格变化基础）。
+     */
+    @PostMapping("/force-price/{asinId}")
+    public ResponseEntity<String> forcePriceChange(@PathVariable Long asinId, @RequestParam(defaultValue = "49.99") Double baselinePrice) {
+        Optional<AsinHistoryModel> latestOpt = historyRepository.findByAsinIdOrderBySnapshotAtDesc(asinId).stream().findFirst();
+        if (latestOpt.isEmpty()) {
+            return ResponseEntity.badRequest().body("no history to mutate");
+        }
+        AsinHistoryModel h = latestOpt.get();
+        Double oldVal = h.getPrice() == null ? null : h.getPrice().doubleValue();
+        h.setPrice(BigDecimal.valueOf(baselinePrice));
+        historyRepository.save(h);
+        log.info("[Debug] 强制修改历史价格 asinId={} oldPrice={} newPrice={} baseline={} ", asinId, oldVal, h.getPrice(), baselinePrice);
+        return ResponseEntity.ok("price mutated from " + oldVal + " to " + baselinePrice);
+    }
+
+    /**
+     * 调试：直接查看指定 ASIN 是否存在（绕过分页接口 500 问题）。
+     */
+    @GetMapping("/asin/{asinId}")
+    public ResponseEntity<String> checkAsin(@PathVariable Long asinId) {
+        return asinRepository.findById(asinId)
+                .map(a -> ResponseEntity.ok("FOUND asin=" + a.getAsin() + ", id=" + a.getId()))
+                .orElseGet(() -> ResponseEntity.badRequest().body("NOT_FOUND id=" + asinId));
+    }
+
+    /**
+     * 调试：统计当前 ASIN 总数。
+     */
+    @GetMapping("/asin-count")
+    public ResponseEntity<String> asinCount() {
+        long count = asinRepository.count();
+        return ResponseEntity.ok("asin_count=" + count);
     }
 }

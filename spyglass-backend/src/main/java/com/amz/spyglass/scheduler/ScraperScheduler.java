@@ -10,6 +10,7 @@ import com.amz.spyglass.repository.AsinRepository;
 import com.amz.spyglass.repository.ScrapeTaskRepository;
 import com.amz.spyglass.service.ScraperService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -45,6 +46,8 @@ public class ScraperScheduler {
     // 历史快照仓库：保存每次抓取后的数据点（用于后续对比与展示）
     private final com.amz.spyglass.repository.AsinHistoryRepository asinHistoryRepository;
     private final com.amz.spyglass.alert.AlertService alertService;
+    @Value("${scraper.fixedDelayMs:14400000}")
+    private long configuredDelay;
 
         /**
      * 批量调度所有 ASIN 的抓取任务。
@@ -245,8 +248,7 @@ public class ScraperScheduler {
      * 获取当前配置的调度延迟（用于日志展示）
      */
     private long getConfiguredDelay() {
-        // 默认值与 @Scheduled 保持一致；若未来需要从配置读取可改为注入 @Value
-        return 14400000L;
+        return configuredDelay;
     }
 
     /**
