@@ -154,17 +154,18 @@ public class ScraperScheduler {
             log.debug("[Task] 抓取完成 ASIN={} 字段摘要: title='{}', price={}, bsr={}, inventory={}, imageMd5={}, aplusMd5={}",
                 asinModel.getAsin(), truncate(snap.getTitle(), 60), snap.getPrice(), snap.getBsr(), snap.getInventory(), snap.getImageMd5(), snap.getAplusMd5());
 
-            // 标记任务成功
+            // 触发告警：故意在保存新快照之前执行，对比当前最新一条历史与本次抓取结果
+            try { alertService.processAlerts(asinModel, snap); } catch (Exception e) { log.warn("[Task] 告警触发失败(预保存阶段) ASIN_ID={} msg={}", asinId, e.getMessage()); }
+
+            // 写入新的历史快照（作为下一轮对比的旧值）
+            persistHistorySnapshot(asinModel, snap);
+
+            // 标记任务成功（放在最后，表示全流程已结束）
             task.setStatus(ScrapeTaskModel.TaskStatusConstants.SUCCESS);
             task.setMessage("title=" + (snap.getTitle() == null ? "" : truncate(snap.getTitle(), 80)));
             task.markFinished();
             scrapeTaskRepository.save(task);
             log.info("[Task] 成功完成抓取 ASIN_ID={} 耗时={}ms", asinId, (System.currentTimeMillis() - execStart));
-
-            // 写入历史快照（失败不影响主任务成功，仅记录警告）
-            persistHistorySnapshot(asinModel, snap);
-            // 触发告警对比
-            try { alertService.processAlerts(asinModel, snap); } catch (Exception e) { log.warn("[Task] 告警触发失败 ASIN_ID={} msg={}", asinId, e.getMessage()); }
 
         } catch (Exception ex) {
             // 发生异常，更新任务重试计数与状态
