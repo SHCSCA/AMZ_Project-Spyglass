@@ -33,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @SpringBootTest
 @ActiveProfiles("test")
+@org.springframework.transaction.annotation.Transactional
 public class ScraperSchedulerMultiAsinTest {
 
     private static final Logger logger = LoggerFactory.getLogger(ScraperSchedulerMultiAsinTest.class);
@@ -66,12 +67,15 @@ public class ScraperSchedulerMultiAsinTest {
         testAsins = new ArrayList<>();
 
         // ASIN 1: B0FSYSHLB7 - Sagenest L Shaped Desk
-        AsinModel asin1 = new AsinModel();
-        asin1.setAsin("B0FSYSHLB7");
-        asin1.setSite("US");
-        asin1.setNickname("测试商品1 - Laptop Stand");
-        asin1.setInventoryThreshold(10);
-        testAsins.add(asinRepository.save(asin1));
+        AsinModel asin1 = asinRepository.findByAsinAndSite("B0FSYSHLB7", "US").orElseGet(() -> {
+            AsinModel m = new AsinModel();
+            m.setAsin("B0FSYSHLB7");
+            m.setSite("US");
+            m.setNickname("测试商品1 - Laptop Stand");
+            m.setInventoryThreshold(10);
+            return asinRepository.save(m);
+        });
+        testAsins.add(asin1);
 
         // ASIN 2: 可以添加更多真实 ASIN 进行测试
         // AsinModel asin2 = new AsinModel();

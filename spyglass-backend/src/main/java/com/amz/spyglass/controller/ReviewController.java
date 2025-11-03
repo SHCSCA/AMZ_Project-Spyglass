@@ -40,8 +40,9 @@ public class ReviewController {
         @Parameter(description = "ASIN 主键 ID", example = "1") @PathVariable("id") Long asinId,
         @Parameter(description = "过滤参数：negative (仅返回 1-3 星)", example = "negative") @RequestParam(name = "rating", required = false) String ratingFilter,
         @Parameter(description = "页码 (从0开始)", example = "0") @RequestParam(defaultValue = "0") int page,
-        @Parameter(description = "每页条数", example = "50") @RequestParam(defaultValue = "50") int size) {
+    @Parameter(description = "每页条数 (最大200)", example = "50") @jakarta.validation.constraints.Max(200) @RequestParam(defaultValue = "50") int size) {
     log.info("Query reviews asinId={}, ratingFilter={}, page={}, size={}", asinId, ratingFilter, page, size);
+            if (size > 200) throw new IllegalArgumentException("size 超过最大限制 200");
         var pageable = org.springframework.data.domain.PageRequest.of(page, size, org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "reviewDate"));
         var pageResult = reviewAlertRepository.findByAsinId(asinId, pageable);
         var stream = pageResult.getContent().stream();

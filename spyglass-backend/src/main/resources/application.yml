@@ -1,6 +1,10 @@
 spring:
   application:
     name: spyglass-backend
+  jackson:
+    time-zone: UTC
+    serialization:
+      WRITE_DATES_AS_TIMESTAMPS: false
   datasource:
     url: jdbc:mysql://${DB_HOST:shcamz.xyz}:${DB_PORT:3306}/${DB_NAME:amzspaglass}?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
     username: ${DB_USER:amzspaglass}
@@ -11,7 +15,8 @@ spring:
       ddl-auto: update
     properties:
       hibernate:
-        # dialect: org.hibernate.dialect.MySQLDialect  # 已弃用MySQL8Dialect，保持注释让Hibernate自动检测
+        # 已弃用MySQL8Dialect，保持注释让Hibernate自动检测
+        # dialect: org.hibernate.dialect.MySQLDialect
     open-in-view: false # 关闭 Open-In-View 以避免在视图渲染阶段执行懒加载查询
   flyway:
     enabled: false
@@ -22,16 +27,26 @@ server:
 # Logging configuration
 logging:
   config: classpath:logback-spring.xml
+  level:
+    root: INFO
+    org.springframework.web: DEBUG
+    com.amz.spyglass: DEBUG
 
 # Actuator 管理端点配置
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include:
+          - health
+          - info
+      base-path: /actuator
   endpoint:
     health:
       show-details: never
+  defaults:
+    metrics:
+      enabled: true
 
 # Spring Doc OpenAPI 配置
 springdoc:

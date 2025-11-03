@@ -37,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional
+@org.junit.jupiter.api.Disabled("需要真实网络与代理，默认禁用，手动回归时移除该注解")
 public class RealProxyScraperIntegrationTest {
 
     private static final Logger logger = LoggerFactory.getLogger(RealProxyScraperIntegrationTest.class);

@@ -31,7 +31,7 @@ import java.time.Instant;
  * 注意：当前未包含“新旧快照对比并触发告警”的逻辑，可在成功保存后扩展。
  */
 @Component
-@Profile("!test && !mysqltest") // 在 test 与 mysqltest 集成测试 profile 下不加载，避免初始与定时调度干扰计数
+@Profile("!manualtest") // 仅在显式 manualtest profile 下排除，默认测试也加载 Bean，便于注入
 @EnableRetry // 启用 Spring Retry，配合 @Retryable 注解使用
 @Slf4j
 @RequiredArgsConstructor

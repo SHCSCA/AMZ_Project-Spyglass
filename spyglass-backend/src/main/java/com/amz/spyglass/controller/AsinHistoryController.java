@@ -75,8 +75,9 @@ public class AsinHistoryController {
             @Parameter(description = "查询的时间范围，例如 '7d' (7天), '30d' (30天), '3m' (3个月)。默认为 30 天。", example = "30d")
             @RequestParam(value = "range", defaultValue = "30d") String range,
             @Parameter(description = "页码 (从0开始)", example = "0") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "每页条数", example = "200") @RequestParam(defaultValue = "200") int size) {
+            @Parameter(description = "每页条数 (最大200)", example = "200") @jakarta.validation.constraints.Max(200) @RequestParam(defaultValue = "200") int size) {
         log.info("Request history asinId={}, range={}, page={}, size={}", asinId, range, page, size);
+            if (size > 200) throw new IllegalArgumentException("size 超过最大限制 200");
         Instant since = parseRange(range);
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "snapshotAt"));
         var pageResult = asinHistoryRepository.findByAsinIdAndSnapshotAtAfterOrderBySnapshotAtDesc(asinId, since, pageable);
