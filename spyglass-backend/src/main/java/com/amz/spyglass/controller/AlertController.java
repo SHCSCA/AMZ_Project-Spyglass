@@ -39,9 +39,10 @@ public class AlertController {
         })
     public PageResponse<AlertLogResponse> latest(
         @Parameter(description = "页码 (从0开始)", example = "0") @RequestParam(defaultValue = "0") int page,
-        @Parameter(description = "每页条数", example = "50") @RequestParam(defaultValue = "50") int size,
+    @Parameter(description = "每页条数 (最大200)", example = "50") @jakarta.validation.constraints.Max(200) @RequestParam(defaultValue = "50") int size,
         @Parameter(description = "告警类型过滤", example = "PRICE_CHANGE") @RequestParam(name = "type", required = false) String type,
         @Parameter(description = "告警状态过滤（预留，当前忽略）", example = "NEW") @RequestParam(name = "status", required = false) String status) {
+    if (size > 200) throw new IllegalArgumentException("size 超过最大限制 200");
     log.info("Query alerts page={}, size={}, type={}, status={}", page, size, type, status);
     var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "alertAt"));
     var pageResult = alertLogRepository.findAll(pageable);
@@ -70,7 +71,7 @@ public class AlertController {
         r.setAlertAt(e.getAlertAt());
         r.setOldValue(e.getOldValue());
         r.setNewValue(e.getNewValue());
-        r.setChangePercent(e.getChangePercent() == null ? null : e.getChangePercent().toPlainString());
+    r.setChangePercent(e.getChangePercent());
         r.setRefId(e.getRefId());
         r.setContextJson(e.getContextJson());
         r.setMessage(e.getMessage());

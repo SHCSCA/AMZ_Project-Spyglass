@@ -46,7 +46,7 @@ public class GroupController {
     @GetMapping
     @Operation(summary = "分组列表", description = "分页获取全部分组")
     public PageResponse<AsinGroupModel> list(@RequestParam(defaultValue = "0") int page,
-                                             @RequestParam(defaultValue = "50") int size) {
+                                             @jakarta.validation.constraints.Max(200) @RequestParam(defaultValue = "50") int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
         Page<AsinGroupModel> p = groupRepository.findAll(pageable);
         PageResponse<AsinGroupModel> resp = new PageResponse<>();
@@ -72,7 +72,7 @@ public class GroupController {
     @Operation(summary = "查看分组下 ASIN 列表", description = "按分组分页列出 ASIN")
     public PageResponse<AsinResponse> listAsins(@PathVariable Long id,
                                                 @RequestParam(defaultValue = "0") int page,
-                                                @RequestParam(defaultValue = "50") int size) {
+                                                @jakarta.validation.constraints.Max(200) @RequestParam(defaultValue = "50") int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
         Page<AsinModel> p = asinRepository.findAllByGroupId(id, pageable);
         List<AsinResponse> items = p.getContent().stream().map(this::toResponse).collect(Collectors.toList());

@@ -25,6 +25,7 @@ import java.util.stream.Collectors;
 import com.amz.spyglass.dto.PageResponse;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * ASIN商品管理REST控制器
@@ -69,14 +70,16 @@ public class AsinController {
         responses = {
             @ApiResponse(responseCode = "200", description = "成功获取列表", content = @Content(array = @ArraySchema(schema = @Schema(implementation = AsinResponse.class))))
         })
+    @Transactional(readOnly = true)
     public PageResponse<AsinResponse> list(
             @Parameter(description = "页码 (从0开始)", example = "0") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "每页条数", example = "50") @RequestParam(defaultValue = "50") int size,
+        @Parameter(description = "每页条数 (最大200)", example = "50") @jakarta.validation.constraints.Max(200) @RequestParam(defaultValue = "50") int size,
             @Parameter(description = "按分组ID过滤", example = "1") @RequestParam(required = false) Long groupId) {
         log.info("Request to list ASINs page={}, size={}, groupId={}", page, size, groupId);
+                if (size > 200) throw new IllegalArgumentException("size 超过最大限制 200");
         PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id"));
     org.springframework.data.domain.Page<AsinModel> pageResult = (groupId == null)
-        ? asinRepository.findAll(pageable)
+        ? asinRepository.findByIdIsNotNull(pageable) // 预加载 group，避免懒加载
         : asinRepository.findAllByGroupId(groupId, pageable);
     List<AsinResponse> items = pageResult.getContent().stream().map(this::toResponse).collect(Collectors.toList());
         PageResponse<AsinResponse> resp = new PageResponse<>();

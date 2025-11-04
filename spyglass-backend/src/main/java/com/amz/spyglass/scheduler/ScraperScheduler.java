@@ -10,6 +10,7 @@ import com.amz.spyglass.repository.AsinRepository;
 import com.amz.spyglass.repository.ScrapeTaskRepository;
 import com.amz.spyglass.service.ScraperService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -30,7 +31,7 @@ import java.time.Instant;
  * 注意：当前未包含“新旧快照对比并触发告警”的逻辑，可在成功保存后扩展。
  */
 @Component
-@Profile("!test && !mysqltest") // 在 test 与 mysqltest 集成测试 profile 下不加载，避免初始与定时调度干扰计数
+@Profile("!manualtest") // 仅在显式 manualtest profile 下排除，默认测试也加载 Bean，便于注入
 @EnableRetry // 启用 Spring Retry，配合 @Retryable 注解使用
 @Slf4j
 @RequiredArgsConstructor
@@ -45,6 +46,8 @@ public class ScraperScheduler {
     // 历史快照仓库：保存每次抓取后的数据点（用于后续对比与展示）
     private final com.amz.spyglass.repository.AsinHistoryRepository asinHistoryRepository;
     private final com.amz.spyglass.alert.AlertService alertService;
+    @Value("${scraper.fixedDelayMs:14400000}")
+    private long configuredDelay;
 
         /**
      * 批量调度所有 ASIN 的抓取任务。
@@ -154,17 +157,18 @@ public class ScraperScheduler {
             log.debug("[Task] 抓取完成 ASIN={} 字段摘要: title='{}', price={}, bsr={}, inventory={}, imageMd5={}, aplusMd5={}",
                 asinModel.getAsin(), truncate(snap.getTitle(), 60), snap.getPrice(), snap.getBsr(), snap.getInventory(), snap.getImageMd5(), snap.getAplusMd5());
 
-            // 标记任务成功
+            // 触发告警：故意在保存新快照之前执行，对比当前最新一条历史与本次抓取结果
+            try { alertService.processAlerts(asinModel, snap); } catch (Exception e) { log.warn("[Task] 告警触发失败(预保存阶段) ASIN_ID={} msg={}", asinId, e.getMessage()); }
+
+            // 写入新的历史快照（作为下一轮对比的旧值）
+            persistHistorySnapshot(asinModel, snap);
+
+            // 标记任务成功（放在最后，表示全流程已结束）
             task.setStatus(ScrapeTaskModel.TaskStatusConstants.SUCCESS);
             task.setMessage("title=" + (snap.getTitle() == null ? "" : truncate(snap.getTitle(), 80)));
             task.markFinished();
             scrapeTaskRepository.save(task);
             log.info("[Task] 成功完成抓取 ASIN_ID={} 耗时={}ms", asinId, (System.currentTimeMillis() - execStart));
-
-            // 写入历史快照（失败不影响主任务成功，仅记录警告）
-            persistHistorySnapshot(asinModel, snap);
-            // 触发告警对比
-            try { alertService.processAlerts(asinModel, snap); } catch (Exception e) { log.warn("[Task] 告警触发失败 ASIN_ID={} msg={}", asinId, e.getMessage()); }
 
         } catch (Exception ex) {
             // 发生异常，更新任务重试计数与状态
@@ -244,8 +248,7 @@ public class ScraperScheduler {
      * 获取当前配置的调度延迟（用于日志展示）
      */
     private long getConfiguredDelay() {
-        // 默认值与 @Scheduled 保持一致；若未来需要从配置读取可改为注入 @Value
-        return 14400000L;
+        return configuredDelay;
     }
 
     /**

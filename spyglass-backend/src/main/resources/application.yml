@@ -1,17 +1,24 @@
 spring:
   application:
     name: spyglass-backend
+  jackson:
+    time-zone: UTC
+    serialization:
+      WRITE_DATES_AS_TIMESTAMPS: false
   datasource:
-    url: jdbc:mysql://${DB_HOST:shcamz.xyz}:${DB_PORT:3306}/${DB_NAME:amzspaglass}?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
-    username: ${DB_USER:amzspaglass}
-    password: ${DB_PASSWORD:RYna5tjK7nKwZd7J}
+    # 修正默认数据库名拼写 (原 amzspaglass ) -> spyglass，避免误连错误库导致数据不一致
+    # 强烈建议生产通过环境变量覆盖所有敏感信息
+    url: jdbc:mysql://${DB_HOST:shcamz.xyz}:${DB_PORT:3306}/${DB_NAME:spyglass}?useSSL=false&serverTimezone=UTC&characterEncoding=utf8
+    username: ${DB_USER:spyglass}
+    password: ${DB_PASSWORD:changeMe!}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
       ddl-auto: update
     properties:
       hibernate:
-        # dialect: org.hibernate.dialect.MySQLDialect  # 已弃用MySQL8Dialect，保持注释让Hibernate自动检测
+        # 已弃用MySQL8Dialect，保持注释让Hibernate自动检测
+        # dialect: org.hibernate.dialect.MySQLDialect
     open-in-view: false # 关闭 Open-In-View 以避免在视图渲染阶段执行懒加载查询
   flyway:
     enabled: false
@@ -22,16 +29,26 @@ server:
 # Logging configuration
 logging:
   config: classpath:logback-spring.xml
+  level:
+    root: INFO
+    org.springframework.web: DEBUG
+    com.amz.spyglass: DEBUG
 
 # Actuator 管理端点配置
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include:
+          - health
+          - info
+      base-path: /actuator
   endpoint:
     health:
       show-details: never
+  defaults:
+    metrics:
+      enabled: true
 
 # Spring Doc OpenAPI 配置
 springdoc:
@@ -39,6 +56,10 @@ springdoc:
     path: /swagger-ui.html
   api-docs:
     path: /v3/api-docs
+  # 添加显式配置防止循环引用导致 schema 生成失败
+  default-produces-media-type: application/json
+  default-consumes-media-type: application/json
+  override-with-generic-response: false
 
 # 爬虫配置
 scraper:

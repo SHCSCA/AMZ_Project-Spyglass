@@ -187,6 +187,58 @@ curl 'http://localhost:8081/api/asin/1/reviews?rating=negative&page=0&size=50'
 }
 ```
 
+#### 分页参数约束与校验
+* `size` 参数全局最大值为 **200**，超过会返回 HTTP 400，并输出标准错误响应。
+* 所有分页端点均已使用 Bean Validation (`@Max(200)`) 以及业务级手动校验双重保障。
+* 推荐前端在 UI 选择框限制可选值（10 / 20 / 50 / 100 / 200）。
+
+#### 标准错误响应结构
+服务端统一返回以下 JSON 结构（`GlobalExceptionHandler`）：
+
+```json
+{
+	"error": "INVALID_PARAM",
+	"message": "size 超过最大限制 200",
+	"details": null,
+	"timestamp": "2025-11-03T08:00:00Z"
+}
+```
+
+错误码约定（节选）：
+| error | 触发场景 |
+| ----- | -------- |
+| `INVALID_PARAM` | 参数校验失败 / 业务约束不满足（如 size>200） |
+| `NOT_FOUND` | 资源不存在 |
+| `INTERNAL_ERROR` | 未捕获的运行时异常 |
+| `BAD_REQUEST` | JSON 解析、类型转换等输入格式错误 |
+
+#### 时间与时区规范
+* 所有返回的时间戳（`createdAt`, `updatedAt`, `snapshotAt`, `alertAt` 等）统一使用 **UTC**。
+* 序列化格式：ISO-8601（例如：`2025-11-03T08:12:34Z`）。
+* Jackson 在 `application.yml` 中已配置：`spring.jackson.time-zone: UTC`。
+
+#### 价格变动字段 `change_percent`
+* 数据库字段：`DECIMAL(8,2)`，以百分比数值形式表达涨跌幅。
+* 含义：`(newPrice - oldPrice) / oldPrice * 100`。
+* 正数表示上涨，负数表示下跌；例如：`-25.00` 表示下降 25%。
+* 后端在生成告警时统一保留 **2 位小数**（四舍五入）。
+
+#### 可空字段（OpenAPI 标注）
+主要响应 DTO 已在 OpenAPI 中用 `@Schema(nullable = true)` 标明可能为 `null` 的字段，前端解析时需做缺省处理：
+* 价格、库存、BSR 相关字段在首轮抓取或失败补全时可能为 `null`。
+* A+ 内容、主图 MD5、Bullet Points 在未获取到 HTML 时为空。
+* 评论相关的 `reviewText` / `rating` 解析失败时可能为 `null`。
+
+#### 前端处理建议摘要
+| 场景 | 建议策略 |
+| ---- | -------- |
+| 字段为 null | 使用占位符 `--` 或灰色标签显示 |
+| 时间展示 | 统一本地转换为用户时区并相对时间（如“5分钟前”） |
+| change_percent | 根据正负号着色（红/绿），绝对值 <0.01% 可显示 `<0.01%` |
+| 分页翻页 | 直接使用响应中的 `hasNext` / `hasPrevious` |
+| 错误提示 | 若 `error=INVALID_PARAM` 且 `message` 含 size，提示“分页大小上限 200” |
+
+
 前端分页建议：
 1. 使用 `hasNext` 与 `hasPrevious` 控制翻页按钮禁用状态。
 2. 若需要“跳页”功能，使用 `totalPages` 生成页码选择器；大数据量时改为“输入页码 + Go”。
@@ -203,6 +255,54 @@ curl 'http://localhost:8081/api/asin/1/history?range=30d&page=0&size=100' | jq '
 * 需要确保应用容器能够访问外部 MySQL（安全组 / 防火墙开放 3306）。
 * 建议为生产环境开启只读账号与最小权限策略。
 * 如果使用云数据库（RDS 等），启用自动备份与多可用区。 
+
+### 前端跨域（CORS）配置说明
+后端实现了动态多源跨域支持，可通过环境变量 `frontend.origins` 注入允许的多个 Origin，逗号分隔。默认已包含：`http://shcamz.xyz:8082,http://localhost:5173,http://localhost:8080,http://127.0.0.1:5173` 等常见开发 / 生产来源。
+
+实现要点：
+* `WebConfig` 使用 `@Value("${frontend.origins:...}")` 读取，拆分后注册到 `addCorsMappings` -> `/api/**`。
+* 允许方法：GET, POST, PUT, PATCH, DELETE, OPTIONS；允许头：Authorization, Content-Type, Accept, X-Requested-With, Origin。
+* `allowCredentials(true)` 已开启，前端需在 fetch/axios 中设置 `credentials: 'include'`（若未来加入 Cookie 会话或鉴权）。
+
+配置方式示例：
+```yaml
+# application.yml（开发环境可放置；生产推荐用环境变量覆盖）
+frontend:
+	origins: http://shcamz.xyz:8082,http://localhost:5173
+```
+
+或在容器 / 启动参数中：
+```bash
+export frontend.origins="https://dash.company.com,http://localhost:5173"
+```
+
+注意事项：
+1. 逗号分隔无空格；必须带协议；不要在末尾添加多余逗号。
+2. 新的前端域名无法访问时，先用 curl 验证是否缺失在列表中。
+3. 与 Nginx / 反向代理并用时，确保未覆盖或剥离 Origin 头。
+
+验证（简单 GET 带 Origin）：
+```bash
+curl -i -H 'Origin: http://shcamz.xyz:8082' http://localhost:8081/api/debug/openapi/status | grep -i access-control-allow-origin
+```
+预期包含：`Access-Control-Allow-Origin: http://shcamz.xyz:8082`
+
+预检（OPTIONS）示例：
+```bash
+curl -i -X OPTIONS \
+	-H 'Origin: http://shcamz.xyz:8082' \
+	-H 'Access-Control-Request-Method: GET' \
+	http://localhost:8081/api/asin
+```
+
+排查表：
+| 现象 | 类型 | 排查动作 | 解决 |
+| --- | --- | --- | --- |
+| 浏览器报 CORS 错误（网络面板无真正响应） | 预检失败 | 用上面 curl 带 Origin | 将域名加入 `frontend.origins` |
+| 返回 500 且有后端统一错误 JSON | 业务异常 | 查看日志栈追踪 | 修复代码 / 数据问题 |
+| OPTIONS 返回 403/404 | 路径或代理问题 | 对比本地成功示例 | 调整代理或 CORS 映射路径 |
+
+扩展：后续可按 profile 拆分（dev 放宽，prod 收紧），或增加基于正则的域名过滤、统计来源访问频率等。
 
 ### 性能调优建议（可选）
 | 场景 | 建议 |

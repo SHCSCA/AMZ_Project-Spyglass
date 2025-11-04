@@ -9,12 +9,14 @@ import org.springframework.context.annotation.Configuration;
  * OpenAPI 配置（中文注释）
  * 说明：通过此配置类可以设置生成的 OpenAPI 元数据，springdoc-openapi 会自动暴露 /v3/api-docs 和 Swagger UI。
  * 如需更多定制（服务器列表、全局 securitySchemes 等），可在此继续扩展。
+ * 
+ * 注意：Spring Boot 3.5.0 + springdoc 2.7.0 环境下，若出现循环引用需在返回类型上添加 @JsonIgnoreProperties 或使用 DTO 隔离。
  */
 @Configuration
 public class OpenApiConfig {
 
     @Bean
-    OpenAPI spyglassOpenAPI() {
+    public OpenAPI spyglassOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
                         .title("Spyglass API")

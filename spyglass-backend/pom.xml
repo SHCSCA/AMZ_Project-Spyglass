@@ -45,12 +45,13 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
         <dependency>
+            <!-- Actuator：健康检查与运维端点 -->
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-thymeleaf</artifactId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-actuator</artifactId>
+            <artifactId>spring-boot-starter-thymeleaf</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -83,10 +84,10 @@
             <artifactId>flyway-core</artifactId>
         </dependency>
         <dependency>
-            <!-- springdoc-openapi：自动生成 OpenAPI 文档并提供 Swagger UI，AI 前端生成依赖该端点 -->
+            <!-- springdoc-openapi：升级到 2.7.0 (最新稳定版) 完全支持 Spring Boot 3.5.0，修复运行时 schema 生成异常 -->
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>2.6.0</version>
+            <version>2.7.0</version>
         </dependency>
         <dependency>
             <!-- 参数校验依赖：用于 DTO 上的 @NotBlank 等注解 -->
@@ -108,18 +109,18 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <!-- 测试时使用的内存数据库 H2，避免单元测试依赖外部 Postgres -->
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- Selenium omitted from runtime skeleton; add when needed -->
         <!-- Spring Retry：用于任务重试机制 -->
         <dependency>
             <groupId>org.springframework.retry</groupId>
             <artifactId>spring-retry</artifactId>
         </dependency>
-        
-        <!-- Apache HttpClient 5: 支持主动代理认证(Preemptive Proxy Auth) -->
-            <dependency>
-                <groupId>org.apache.httpcomponents.client5</groupId>
-                <artifactId>httpclient5</artifactId>
-            </dependency>
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-aspects</artifactId>

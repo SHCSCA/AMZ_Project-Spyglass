@@ -40,10 +40,11 @@ public class AsinAlertController {
     public PageResponse<AlertLogResponse> list(
             @Parameter(description = "ASIN 主键 ID", example = "1") @PathVariable("id") Long asinId,
             @Parameter(description = "页码 (从0开始)", example = "0") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "每页条数", example = "50") @RequestParam(defaultValue = "50") int size,
+            @Parameter(description = "每页条数 (最大200)", example = "50") @jakarta.validation.constraints.Max(200) @RequestParam(defaultValue = "50") int size,
             @Parameter(description = "告警类型过滤", example = "PRICE_CHANGE") @RequestParam(required = false, name = "type") String type,
             @Parameter(description = "开始时间 ISO-8601", example = "2025-10-01T00:00:00Z") @RequestParam(required = false, name = "from") String from,
             @Parameter(description = "结束时间 ISO-8601", example = "2025-11-01T23:59:59Z") @RequestParam(required = false, name = "to") String to) {
+    if (size > 200) throw new IllegalArgumentException("size 超过最大限制 200");
         log.info("Query asin alerts asinId={}, page={}, size={}, type={}, from={}, to={}", asinId, page, size, type, from, to);
         Instant fromTs = parseInstantOrDefault(from, Instant.now().minusSeconds(30L * 24 * 3600));
         Instant toTs = parseInstantOrDefault(to, Instant.now());
@@ -80,7 +81,7 @@ public class AsinAlertController {
         r.setAlertAt(e.getAlertAt());
         r.setOldValue(e.getOldValue());
         r.setNewValue(e.getNewValue());
-        r.setChangePercent(e.getChangePercent() == null ? null : e.getChangePercent().toPlainString());
+    r.setChangePercent(e.getChangePercent());
         r.setRefId(e.getRefId());
         r.setContextJson(e.getContextJson());
         r.setMessage(e.getMessage());

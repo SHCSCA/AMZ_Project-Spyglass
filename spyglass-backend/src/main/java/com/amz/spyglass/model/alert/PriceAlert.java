@@ -36,12 +36,13 @@ public class PriceAlert extends BaseEntityModel {
     private Instant alertAt = Instant.now();
 
     // ----- 新增的上下文字段：记录价格变化时其它关键字段的旧值与新值 -----
+    // 标题可能较长，使用 MEDIUMTEXT 以避免超出 TEXT 64KB 或 VARCHAR 限制
     @Lob
-    @Column(name = "old_title")
+    @Column(name = "old_title", columnDefinition = "MEDIUMTEXT")
     private String oldTitle;
 
     @Lob
-    @Column(name = "new_title")
+    @Column(name = "new_title", columnDefinition = "MEDIUMTEXT")
     private String newTitle;
 
     @Column(name = "old_image_md5", length = 64)
@@ -50,12 +51,13 @@ public class PriceAlert extends BaseEntityModel {
     @Column(name = "new_image_md5", length = 64)
     private String newImageMd5;
 
+    // 五点要点可能包含大量文本（拼接换行），提升为 MEDIUMTEXT
     @Lob
-    @Column(name = "old_bullet_points")
+    @Column(name = "old_bullet_points", columnDefinition = "MEDIUMTEXT")
     private String oldBulletPoints;
 
     @Lob
-    @Column(name = "new_bullet_points")
+    @Column(name = "new_bullet_points", columnDefinition = "MEDIUMTEXT")
     private String newBulletPoints;
 
     @Column(name = "old_aplus_md5", length = 64)
