@@ -170,4 +170,31 @@ public class DebugController {
         result.put("springdocVersion", springdocVersion);
         return ResponseEntity.ok(result);
     }
+
+    /**
+     * 列出所有包含 "springdoc" 关键字的 Bean 名称与类型，辅助生产排查未注册 OpenApiResource 的原因。
+     */
+    @GetMapping("/openapi/beans")
+    public ResponseEntity<java.util.List<java.util.Map<String, String>>> listSpringdocBeans() {
+        String keyword = "springdoc";
+    String[] names = applicationContext.getBeanDefinitionNames();
+    java.util.List<java.util.Map<String, String>> matched = new java.util.ArrayList<>();
+    for (String n : names) {
+            if (n.toLowerCase().contains(keyword)) {
+                try {
+                    Object bean = applicationContext.getBean(n);
+                    java.util.Map<String, String> m = new java.util.LinkedHashMap<>();
+                    m.put("name", n);
+                    m.put("type", bean.getClass().getName());
+                    matched.add(m);
+                } catch (Exception e) {
+                    java.util.Map<String, String> m = new java.util.LinkedHashMap<>();
+                    m.put("name", n);
+                    m.put("error", e.getMessage());
+                    matched.add(m);
+                }
+            }
+        }
+        return ResponseEntity.ok(matched);
+    }
 }

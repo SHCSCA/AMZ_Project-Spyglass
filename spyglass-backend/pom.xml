@@ -84,10 +84,10 @@
             <artifactId>flyway-core</artifactId>
         </dependency>
         <dependency>
-            <!-- springdoc-openapi：自动生成 OpenAPI 文档并提供 Swagger UI，AI 前端生成依赖该端点 -->
+            <!-- springdoc-openapi：降级到 2.5.0 测试与 Spring Boot 3.5.0 映射兼容性，若生产仍无映射再考虑升级到后续补丁版本 -->
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>2.6.0</version>
+            <version>2.5.0</version>
         </dependency>
         <dependency>
             <!-- 参数校验依赖：用于 DTO 上的 @NotBlank 等注解 -->
