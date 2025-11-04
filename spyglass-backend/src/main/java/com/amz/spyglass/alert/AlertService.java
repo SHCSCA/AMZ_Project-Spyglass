@@ -52,14 +52,19 @@ public class AlertService {
     public void processAlerts(AsinModel asin, AsinSnapshotDTO newSnap) {
         String cid = UUID.randomUUID().toString().substring(0,8); // 简短 correlationId
         // 当前流程已经调整为：先调用 processAlerts 再保存新历史快照
-        // 因此此处查询到的最新一条历史就是“上一轮抓取的结果”，可直接作为旧值用于对比。
+        // 因此此处查询到的最新一条历史就是"上一轮抓取的结果"，可直接作为旧值用于对比。
+        // 重要：必须查询该 ASIN 自己的历史记录，而不是全局历史记录
         List<AsinHistoryModel> rows = historyRepository.findByAsinIdOrderBySnapshotAtDesc(asin.getId());
         AsinHistoryModel last = rows.isEmpty() ? null : rows.getFirst();
 
         if (last == null) {
-            logger.debug("[AlertDebug cid={}] ASIN={} 首次抓取，无历史对比，跳过告警", cid, asin.getAsin());
+            logger.info("[AlertDebug cid={}] ASIN={} (ID={}) 首次抓取，无历史对比，跳过告警", cid, asin.getAsin(), asin.getId());
             return;
         }
+
+        // 确认查询到的历史记录确实属于当前ASIN
+        logger.info("[AlertDebug cid={}] ASIN={} (ID={}) 查询到历史记录数={}, 最新快照时间={}, 历史ASIN_ID={}", 
+            cid, asin.getAsin(), asin.getId(), rows.size(), last.getSnapshotAt(), last.getAsin().getId());
 
         // 价格变动
         checkPriceChange(cid, asin, last, newSnap);
