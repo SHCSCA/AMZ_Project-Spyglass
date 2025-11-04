@@ -4,9 +4,12 @@ import com.amz.spyglass.scheduler.ScraperScheduler;
 import com.amz.spyglass.repository.AsinRepository;
 import com.amz.spyglass.repository.AsinHistoryRepository;
 import com.amz.spyglass.model.AsinHistoryModel;
+import io.swagger.v3.oas.models.OpenAPI;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.context.ApplicationContext;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -26,6 +29,7 @@ public class DebugController {
     private final ScraperScheduler scraperScheduler;
     private final AsinRepository asinRepository;
     private final AsinHistoryRepository historyRepository;
+    private final ApplicationContext applicationContext; // 用于检测 OpenAPI Bean 与映射
 
     /**
      * 手动触发单个 ASIN 抓取（异步），返回是否提交成功。
@@ -89,5 +93,81 @@ public class DebugController {
     public ResponseEntity<String> asinCount() {
         long count = asinRepository.count();
         return ResponseEntity.ok("asin_count=" + count);
+    }
+
+    /**
+     * 手动触发批量调度（runAll），返回当前 ASIN 数量与立即触发状态。
+     * 注意：runAll 内部使用异步提交，返回不代表全部任务已完成。
+     */
+    @GetMapping("/scheduler/run-batch")
+    public ResponseEntity<java.util.Map<String, Object>> triggerBatchRun() {
+        var asins = asinRepository.findAll();
+        int count = asins.size();
+        log.info("[Debug] 手动触发批量调度，当前 ASIN 总数={}", count);
+        try {
+            scraperScheduler.runAll();
+        } catch (Exception e) {
+            log.error("[Debug] 手动触发批量调度异常: {}", e.getMessage(), e);
+            java.util.Map<String, Object> err = new java.util.LinkedHashMap<>();
+            err.put("submitted", false);
+            err.put("asinCount", count);
+            err.put("error", e.getMessage());
+            return ResponseEntity.internalServerError().body(err);
+        }
+        java.util.Map<String, Object> ok = new java.util.LinkedHashMap<>();
+        ok.put("submitted", true);
+        ok.put("asinCount", count);
+        ok.put("note", "Tasks submitted asynchronously; check scheduler logs for completion.");
+        return ResponseEntity.ok(ok);
+    }
+
+    /**
+     * 调试：列出当前全部 ASIN 基本信息 (id, asin, site, nickname)。
+     * 仅用于排查调度时数量不一致的问题。
+     */
+    @GetMapping("/asin/list")
+    public ResponseEntity<java.util.List<java.util.Map<String, Object>>> asinList() {
+        var list = asinRepository.findAll();
+        var resp = list.stream().map(a -> {
+            java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("id", a.getId());
+            m.put("asin", a.getAsin());
+            m.put("site", a.getSite());
+            m.put("nickname", a.getNickname());
+            return m;
+        }).toList();
+        return ResponseEntity.ok(resp);
+    }
+
+    /**
+     * 调试：检测 OpenAPI Bean 是否存在以及 /v3/api-docs 映射是否注册。
+     * 用于生产环境 Swagger 500 排查。
+     */
+    @GetMapping("/openapi/status")
+    public ResponseEntity<java.util.Map<String, Object>> openApiStatus() {
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        boolean beanExists = applicationContext.getBeanNamesForType(OpenAPI.class).length > 0;
+        result.put("openApiBeanExists", beanExists);
+        // 检测是否已注册 /v3/api-docs
+        boolean apiDocsMapped = false;
+        try {
+            RequestMappingHandlerMapping mapping = applicationContext.getBean(RequestMappingHandlerMapping.class);
+            apiDocsMapped = mapping.getHandlerMethods().keySet().stream()
+                .anyMatch(info -> info.getPatternsCondition() != null &&
+                    info.getPatternsCondition().getPatterns().stream().anyMatch(p -> p.equals("/v3/api-docs")));
+        } catch (Exception e) {
+            log.warn("[Debug] 检测 /v3/api-docs 映射异常: {}", e.getMessage());
+        }
+        result.put("apiDocsMapped", apiDocsMapped);
+        // 读取 springdoc 版本（若存在）
+        String springdocVersion = null;
+        try {
+            Package pkg = Class.forName("org.springdoc.core.SpringDocConfigProperties").getPackage();
+            if (pkg != null) {
+                springdocVersion = pkg.getImplementationVersion();
+            }
+        } catch (ClassNotFoundException ignored) {}
+        result.put("springdocVersion", springdocVersion);
+        return ResponseEntity.ok(result);
     }
 }
