@@ -256,6 +256,54 @@ curl 'http://localhost:8081/api/asin/1/history?range=30d&page=0&size=100' | jq '
 * 建议为生产环境开启只读账号与最小权限策略。
 * 如果使用云数据库（RDS 等），启用自动备份与多可用区。 
 
+### 前端跨域（CORS）配置说明
+后端实现了动态多源跨域支持，可通过环境变量 `frontend.origins` 注入允许的多个 Origin，逗号分隔。默认已包含：`http://shcamz.xyz:8082,http://localhost:5173,http://localhost:8080,http://127.0.0.1:5173` 等常见开发 / 生产来源。
+
+实现要点：
+* `WebConfig` 使用 `@Value("${frontend.origins:...}")` 读取，拆分后注册到 `addCorsMappings` -> `/api/**`。
+* 允许方法：GET, POST, PUT, PATCH, DELETE, OPTIONS；允许头：Authorization, Content-Type, Accept, X-Requested-With, Origin。
+* `allowCredentials(true)` 已开启，前端需在 fetch/axios 中设置 `credentials: 'include'`（若未来加入 Cookie 会话或鉴权）。
+
+配置方式示例：
+```yaml
+# application.yml（开发环境可放置；生产推荐用环境变量覆盖）
+frontend:
+	origins: http://shcamz.xyz:8082,http://localhost:5173
+```
+
+或在容器 / 启动参数中：
+```bash
+export frontend.origins="https://dash.company.com,http://localhost:5173"
+```
+
+注意事项：
+1. 逗号分隔无空格；必须带协议；不要在末尾添加多余逗号。
+2. 新的前端域名无法访问时，先用 curl 验证是否缺失在列表中。
+3. 与 Nginx / 反向代理并用时，确保未覆盖或剥离 Origin 头。
+
+验证（简单 GET 带 Origin）：
+```bash
+curl -i -H 'Origin: http://shcamz.xyz:8082' http://localhost:8081/api/debug/openapi/status | grep -i access-control-allow-origin
+```
+预期包含：`Access-Control-Allow-Origin: http://shcamz.xyz:8082`
+
+预检（OPTIONS）示例：
+```bash
+curl -i -X OPTIONS \
+	-H 'Origin: http://shcamz.xyz:8082' \
+	-H 'Access-Control-Request-Method: GET' \
+	http://localhost:8081/api/asin
+```
+
+排查表：
+| 现象 | 类型 | 排查动作 | 解决 |
+| --- | --- | --- | --- |
+| 浏览器报 CORS 错误（网络面板无真正响应） | 预检失败 | 用上面 curl 带 Origin | 将域名加入 `frontend.origins` |
+| 返回 500 且有后端统一错误 JSON | 业务异常 | 查看日志栈追踪 | 修复代码 / 数据问题 |
+| OPTIONS 返回 403/404 | 路径或代理问题 | 对比本地成功示例 | 调整代理或 CORS 映射路径 |
+
+扩展：后续可按 profile 拆分（dev 放宽，prod 收紧），或增加基于正则的域名过滤、统计来源访问频率等。
+
 ### 性能调优建议（可选）
 | 场景 | 建议 |
 | --- | --- |
