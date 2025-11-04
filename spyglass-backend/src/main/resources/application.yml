@@ -56,6 +56,10 @@ springdoc:
     path: /swagger-ui.html
   api-docs:
     path: /v3/api-docs
+  # 添加显式配置防止循环引用导致 schema 生成失败
+  default-produces-media-type: application/json
+  default-consumes-media-type: application/json
+  override-with-generic-response: false
 
 # 爬虫配置
 scraper:
