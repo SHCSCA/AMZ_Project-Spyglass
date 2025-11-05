@@ -278,4 +278,71 @@ public class DebugController {
         
         return ResponseEntity.ok(result);
     }
+
+    /**
+     * 执行 change_alert 表字段类型修复
+     * ⚠️ 警告：此操作会修改数据库表结构，仅在确认需要修复时调用
+     */
+    @PostMapping("/change-alert/fix-field-length")
+    public ResponseEntity<java.util.Map<String, Object>> fixChangeAlertFieldLength() {
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        
+        try (java.sql.Connection conn = dataSource.getConnection();
+             java.sql.Statement stmt = conn.createStatement()) {
+            
+            log.info("[Debug] 开始修复 change_alert 表字段长度...");
+            
+            // 1. 记录修复前的字段类型
+            String beforeSql = "SELECT COLUMN_NAME, COLUMN_TYPE, CHARACTER_MAXIMUM_LENGTH " +
+                             "FROM INFORMATION_SCHEMA.COLUMNS " +
+                             "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'change_alert' " +
+                             "AND COLUMN_NAME IN ('old_value', 'new_value')";
+            
+            java.util.List<java.util.Map<String, Object>> beforeFix = new java.util.ArrayList<>();
+            try (java.sql.ResultSet rs = stmt.executeQuery(beforeSql)) {
+                while (rs.next()) {
+                    java.util.Map<String, Object> col = new java.util.LinkedHashMap<>();
+                    col.put("name", rs.getString("COLUMN_NAME"));
+                    col.put("type", rs.getString("COLUMN_TYPE"));
+                    col.put("maxLength", rs.getObject("CHARACTER_MAXIMUM_LENGTH"));
+                    beforeFix.add(col);
+                }
+            }
+            result.put("beforeFix", beforeFix);
+            
+            // 2. 执行 ALTER TABLE 修改字段类型
+            String alterOldValue = "ALTER TABLE change_alert MODIFY COLUMN old_value TEXT COMMENT '变更前的值'";
+            String alterNewValue = "ALTER TABLE change_alert MODIFY COLUMN new_value TEXT COMMENT '变更后的值'";
+            
+            log.info("[Debug] 执行 SQL: {}", alterOldValue);
+            stmt.executeUpdate(alterOldValue);
+            
+            log.info("[Debug] 执行 SQL: {}", alterNewValue);
+            stmt.executeUpdate(alterNewValue);
+            
+            // 3. 验证修复结果
+            java.util.List<java.util.Map<String, Object>> afterFix = new java.util.ArrayList<>();
+            try (java.sql.ResultSet rs = stmt.executeQuery(beforeSql)) {
+                while (rs.next()) {
+                    java.util.Map<String, Object> col = new java.util.LinkedHashMap<>();
+                    col.put("name", rs.getString("COLUMN_NAME"));
+                    col.put("type", rs.getString("COLUMN_TYPE"));
+                    col.put("maxLength", rs.getObject("CHARACTER_MAXIMUM_LENGTH"));
+                    afterFix.add(col);
+                }
+            }
+            result.put("afterFix", afterFix);
+            
+            result.put("success", true);
+            result.put("message", "字段类型修复成功：old_value 和 new_value 已修改为 TEXT 类型");
+            log.info("[Debug] change_alert 表字段长度修复完成");
+            
+        } catch (Exception e) {
+            log.error("[Debug] 修复 change_alert 表字段长度失败: {}", e.getMessage(), e);
+            result.put("success", false);
+            result.put("error", e.getMessage());
+        }
+        
+        return ResponseEntity.ok(result);
+    }
 }

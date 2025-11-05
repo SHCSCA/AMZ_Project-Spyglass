@@ -31,8 +31,8 @@ logging:
   config: classpath:logback-spring.xml
   level:
     root: INFO
-    org.springframework.web: DEBUG
-    com.amz.spyglass: DEBUG
+    org.springframework.web: INFO
+    com.amz.spyglass: INFO
 
 # Actuator 管理端点配置
 management:
