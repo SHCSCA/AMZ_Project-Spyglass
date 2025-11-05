@@ -1,17 +1,17 @@
 package com.amz.spyglass.model;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import java.time.Instant;
 
 /**
- * ASIN 分组实体：用于将多个竞争 ASIN 归为同一“我的产品”对应的竞品集合。
+ * ASIN 分组实体：用于将多个竞争 ASIN 归为同一"我的产品"对应的竞品集合。
  * 典型场景：一个自有产品对应市场上多个不同品牌/变体的竞品，需要统一查看与统计。
  */
-@Getter
-@Setter
+@Data
+@EqualsAndHashCode(callSuper = false)
 @NoArgsConstructor
 @Entity
 @Table(name = "asin_group")

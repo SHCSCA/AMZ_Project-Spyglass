@@ -78,6 +78,25 @@ public class DebugController {
     }
 
     /**
+     * 修改最新一条历史记录的 bullet points（测试长文本字段）。
+     */
+    @PostMapping("/force-bulletpoints/{asinId}")
+    public ResponseEntity<String> forceBulletPointsChange(@PathVariable Long asinId, @RequestParam(defaultValue = "SHORT_TEST_BULLETPOINTS") String newBulletPoints) {
+        Optional<AsinHistoryModel> latestOpt = historyRepository.findByAsinIdOrderBySnapshotAtDesc(asinId).stream().findFirst();
+        if (latestOpt.isEmpty()) {
+            return ResponseEntity.badRequest().body("no history to mutate");
+        }
+        AsinHistoryModel h = latestOpt.get();
+        String originalBp = h.getBulletPoints();
+        int oldLen = originalBp == null ? 0 : originalBp.length();
+        h.setBulletPoints(newBulletPoints);
+        historyRepository.save(h);
+        int newLen = newBulletPoints.length();
+        log.info("[Debug] 强制修改历史bulletPoints asinId={} oldLength={} newLength={}", asinId, oldLen, newLen);
+        return ResponseEntity.ok("bulletPoints mutated from length=" + oldLen + " to length=" + newLen);
+    }
+
+    /**
      * 调试：直接查看指定 ASIN 是否存在（绕过分页接口 500 问题）。
      */
     @GetMapping("/asin/{asinId}")
@@ -341,6 +360,72 @@ public class DebugController {
             log.error("[Debug] 修复 change_alert 表字段长度失败: {}", e.getMessage(), e);
             result.put("success", false);
             result.put("error", e.getMessage());
+        }
+        
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * 测试AlertService的processAlerts方法，捕获并返回任何异常
+     */
+    @PostMapping("/test-alert-service/{asinId}")
+    public ResponseEntity<java.util.Map<String, Object>> testAlertService(@PathVariable Long asinId) {
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        try {
+            // 加载ASIN
+            var asinOpt = asinRepository.findById(asinId);
+            if (asinOpt.isEmpty()) {
+                result.put("success", false);
+                result.put("error", "ASIN not found: " + asinId);
+                return ResponseEntity.badRequest().body(result);
+            }
+            var asin = asinOpt.get();
+            
+            // 获取最新历史记录
+            var historyList = historyRepository.findByAsinIdOrderBySnapshotAtDesc(asinId);
+            if (historyList.isEmpty()) {
+                result.put("success", false);
+                result.put("error", "No history found for ASIN: " + asinId);
+                return ResponseEntity.badRequest().body(result);
+            }
+            var latest = historyList.get(0);
+            
+            // 构造模拟的新快照(稍微修改数据以触发变化检测)
+            com.amz.spyglass.scraper.AsinSnapshotDTO mockSnap = new com.amz.spyglass.scraper.AsinSnapshotDTO();
+            mockSnap.setTitle(latest.getTitle() + " [MODIFIED]");
+            mockSnap.setPrice(latest.getPrice() == null ? null : latest.getPrice().add(new java.math.BigDecimal("1.00")));
+            mockSnap.setBsr(latest.getBsr());
+            mockSnap.setBsrCategory(latest.getBsrCategory());
+            mockSnap.setBsrSubcategory(latest.getBsrSubcategory());
+            mockSnap.setBsrSubcategoryRank(latest.getBsrSubcategoryRank());
+            mockSnap.setInventory(latest.getInventory());
+            mockSnap.setBulletPoints(latest.getBulletPoints() + " [MODIFIED]");
+            mockSnap.setImageMd5(latest.getImageMd5() == null ? "modified" : latest.getImageMd5() + "X");
+            mockSnap.setAplusMd5(latest.getAplusMd5() == null ? "modified" : latest.getAplusMd5() + "X");
+            mockSnap.setTotalReviews(latest.getTotalReviews());
+            mockSnap.setAvgRating(latest.getAvgRating());
+            mockSnap.setLatestNegativeReviewMd5(latest.getLatestNegativeReviewMd5());
+            mockSnap.setSnapshotAt(java.time.Instant.now());
+            
+            // 调用AlertService
+            log.info("[Debug] 测试调用 AlertService.processAlerts for ASIN_ID={}", asinId);
+            com.amz.spyglass.alert.AlertService alertService = applicationContext.getBean(com.amz.spyglass.alert.AlertService.class);
+            alertService.processAlerts(asin, mockSnap);
+            
+            result.put("success", true);
+            result.put("message", "AlertService executed successfully");
+            result.put("asinId", asinId);
+            result.put("historyCount", historyList.size());
+            
+        } catch (Exception e) {
+            log.error("[Debug] AlertService测试失败: {}", e.getMessage(), e);
+            result.put("success", false);
+            result.put("error", e.getMessage());
+            result.put("errorClass", e.getClass().getName());
+            result.put("stackTrace", java.util.Arrays.stream(e.getStackTrace())
+                .limit(10)
+                .map(StackTraceElement::toString)
+                .toList());
         }
         
         return ResponseEntity.ok(result);
