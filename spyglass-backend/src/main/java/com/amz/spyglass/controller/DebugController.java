@@ -30,6 +30,7 @@ public class DebugController {
     private final AsinRepository asinRepository;
     private final AsinHistoryRepository historyRepository;
     private final ApplicationContext applicationContext; // 用于检测 OpenAPI Bean 与映射
+    private final javax.sql.DataSource dataSource; // 用于执行原生 SQL 查询表结构
 
     /**
      * 手动触发单个 ASIN 抓取（异步），返回是否提交成功。
@@ -196,5 +197,85 @@ public class DebugController {
             }
         }
         return ResponseEntity.ok(matched);
+    }
+
+    /**
+     * 查询 change_alert 表结构和数据统计，用于诊断字段长度问题
+     */
+    @GetMapping("/change-alert/info")
+    public ResponseEntity<java.util.Map<String, Object>> getChangeAlertInfo() {
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        
+        try (java.sql.Connection conn = dataSource.getConnection();
+             java.sql.Statement stmt = conn.createStatement()) {
+            
+            // 1. 查询表结构
+            String structureSql = "SELECT COLUMN_NAME, COLUMN_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE " +
+                                "FROM INFORMATION_SCHEMA.COLUMNS " +
+                                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'change_alert' " +
+                                "ORDER BY ORDINAL_POSITION";
+            
+            java.util.List<java.util.Map<String, Object>> columns = new java.util.ArrayList<>();
+            try (java.sql.ResultSet rs = stmt.executeQuery(structureSql)) {
+                while (rs.next()) {
+                    java.util.Map<String, Object> col = new java.util.LinkedHashMap<>();
+                    col.put("name", rs.getString("COLUMN_NAME"));
+                    col.put("type", rs.getString("COLUMN_TYPE"));
+                    col.put("maxLength", rs.getObject("CHARACTER_MAXIMUM_LENGTH"));
+                    col.put("nullable", rs.getString("IS_NULLABLE"));
+                    columns.add(col);
+                }
+            }
+            result.put("columns", columns);
+            
+            // 2. 统计记录数
+            String countSql = "SELECT COUNT(*) as total FROM change_alert";
+            try (java.sql.ResultSet rs = stmt.executeQuery(countSql)) {
+                if (rs.next()) {
+                    result.put("totalRecords", rs.getInt("total"));
+                }
+            }
+            
+            // 3. 按类型分组统计
+            String groupSql = "SELECT alert_type, COUNT(*) as count FROM change_alert GROUP BY alert_type";
+            java.util.Map<String, Integer> byType = new java.util.LinkedHashMap<>();
+            try (java.sql.ResultSet rs = stmt.executeQuery(groupSql)) {
+                while (rs.next()) {
+                    byType.put(rs.getString("alert_type"), rs.getInt("count"));
+                }
+            }
+            result.put("countByType", byType);
+            
+            // 4. 最新5条记录（包含字段长度）
+            String recentSql = "SELECT id, asin_id, alert_type, " +
+                             "LENGTH(old_value) as old_len, LENGTH(new_value) as new_len, " +
+                             "LEFT(old_value, 50) as old_preview, LEFT(new_value, 50) as new_preview, " +
+                             "alert_at FROM change_alert ORDER BY alert_at DESC LIMIT 5";
+            java.util.List<java.util.Map<String, Object>> recent = new java.util.ArrayList<>();
+            try (java.sql.ResultSet rs = stmt.executeQuery(recentSql)) {
+                while (rs.next()) {
+                    java.util.Map<String, Object> rec = new java.util.LinkedHashMap<>();
+                    rec.put("id", rs.getLong("id"));
+                    rec.put("asinId", rs.getLong("asin_id"));
+                    rec.put("alertType", rs.getString("alert_type"));
+                    rec.put("oldLength", rs.getInt("old_len"));
+                    rec.put("newLength", rs.getInt("new_len"));
+                    rec.put("oldPreview", rs.getString("old_preview"));
+                    rec.put("newPreview", rs.getString("new_preview"));
+                    rec.put("alertAt", rs.getTimestamp("alert_at"));
+                    recent.add(rec);
+                }
+            }
+            result.put("recentRecords", recent);
+            
+            result.put("success", true);
+            
+        } catch (Exception e) {
+            log.error("[Debug] 查询 change_alert 表信息失败: {}", e.getMessage(), e);
+            result.put("success", false);
+            result.put("error", e.getMessage());
+        }
+        
+        return ResponseEntity.ok(result);
     }
 }

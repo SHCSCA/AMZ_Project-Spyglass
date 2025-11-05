@@ -346,57 +346,8 @@ curl -i -X OPTIONS \
 使用建议：
 1. 本地或新测试环境：可直接执行最新 `schema_full_*.sql` 建库加速。后续继续使用增量迁移。  
 2. 生产环境：严禁删除旧版 `V*.sql`；新增字段/索引/表时继续追加新的 `Vx.y.z__desc.sql`。  
-3. 当迁移文件较多（>30）时，可考虑年终生成一个"归档快照"文件，仅用于文档或快速初始化，不纳入 Flyway baseline。  
+3. 当迁移文件较多（>30）时，可考虑年终生成一个“归档快照”文件，仅用于文档或快速初始化，不纳入 Flyway baseline。  
 4. 回滚策略：通过 Git 历史恢复上一个迁移文件 + 手工补偿（例如：DROP COLUMN / DROP TABLE），避免直接替换为快照。  
-
-### 常见问题排查（Troubleshooting）
-
-#### 问题 1：change_alert 表无数据或抛出 "Data too long for column 'new_value'" 错误
-
-**现象**：
-- 日志显示 `SQL Error: 1406, SQLState: 22001 - Data truncation: Data too long for column 'new_value' at row 1`
-- `change_alert` 表无变更记录，但 `alert_log` 表有数据
-
-**原因**：
-早期迁移脚本可能将 `old_value` / `new_value` 定义为 `VARCHAR(255)` 或其他固定长度，无法存储完整的五点描述（平均 900+ 字符）等长文本。
-
-**解决方案**：
-
-1. **生产环境立即修复**（在低峰期执行）：
-   ```bash
-   mysql -u用户名 -p密码 spyglass < spyglass-backend/sql/hotfix_change_alert_value_length.sql
-   ```
-
-2. **验证修复结果**：
-   ```sql
-   SELECT COLUMN_NAME, COLUMN_TYPE 
-   FROM INFORMATION_SCHEMA.COLUMNS
-   WHERE TABLE_NAME = 'change_alert' AND COLUMN_NAME IN ('old_value', 'new_value');
-   -- 预期输出：text (不是 varchar)
-   ```
-
-3. **新环境自动应用**：
-   - Flyway 会自动执行 `V1.0.2__fix_change_alert_value_length.sql` 迁移脚本
-   - 实体类已使用 `@Lob` 注解，JPA 会正确映射为 `TEXT` 类型
-
-4. **触发告警验证**：
-   ```bash
-   # 手动修改历史快照数据，制造字段差异
-   UPDATE asin_history SET title = 'OLD_TITLE_TEST' WHERE id = 1;
-   
-   # 触发单次抓取（或等待定时任务）
-   curl -X POST http://localhost:8081/api/debug/scrape/1
-   
-   # 检查 change_alert 表是否有新记录
-   SELECT alert_type, COUNT(*) FROM change_alert GROUP BY alert_type;
-   ```
-
-**相关迁移文件**：
-- `V1.0.2__fix_change_alert_value_length.sql` - 自动迁移脚本（新环境）
-- `sql/hotfix_change_alert_value_length.sql` - 手动修复脚本（生产环境）
-
----
-
 5. 审计与合规：保留增量迁移可在 CodeReview / 安全审计中逐条溯源每次结构变更的意图与日期。  
 
 索引策略当前最小化（仅 `idx_asin_group_id`），后续根据负载再添加：
