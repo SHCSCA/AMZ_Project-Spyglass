@@ -14,19 +14,11 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      # 在开启 Flyway 之后，避免 Hibernate 自行尝试修改结构导致手工修复丢失：
-      # 生产建议使用 validate；开发可暂用 none 或 validate，避免与迁移脚本冲突
-      ddl-auto: validate
+      ddl-auto: none
     properties:
       hibernate:
-        # 已弃用MySQL8Dialect，保持注释让Hibernate自动检测
-        # dialect: org.hibernate.dialect.MySQLDialect
-    open-in-view: false # 关闭 Open-In-View 以避免在视图渲染阶段执行懒加载查询
-  flyway:
-    enabled: true
-    # 若历史库未使用 Flyway，可在首次接入时基准化
-    baseline-on-migrate: true
-    baseline-version: 1.0.0
+        format_sql: false
+    open-in-view: false
 
 server:
   port: ${PORT:8081}

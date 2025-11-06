@@ -58,13 +58,11 @@ public class AlertService {
         AsinHistoryModel last = rows.isEmpty() ? null : rows.getFirst();
 
         if (last == null) {
-            logger.info("[AlertDebug cid={}] ASIN={} (ID={}) 首次抓取，无历史对比，跳过告警", cid, asin.getAsin(), asin.getId());
+            logger.info("[Alert] ASIN={} (ID={}) 首次抓取，无历史对比，跳过告警", asin.getAsin(), asin.getId());
             return;
         }
 
-        // 确认查询到的历史记录确实属于当前ASIN
-        logger.info("[AlertDebug cid={}] ASIN={} (ID={}) 查询到历史记录数={}, 最新快照时间={}, 历史ASIN_ID={}", 
-            cid, asin.getAsin(), asin.getId(), rows.size(), last.getSnapshotAt(), last.getAsin().getId());
+        logger.info("[Alert] ASIN={} (ID={}) 开始对比告警检测，历史记录数={}", asin.getAsin(), asin.getId(), rows.size());
 
         // 价格变动
         checkPriceChange(cid, asin, last, newSnap);
@@ -79,8 +77,6 @@ public class AlertService {
     private void checkPriceChange(String cid, AsinModel asin, AsinHistoryModel last, AsinSnapshotDTO newSnap) {
         BigDecimal oldPrice = last.getPrice();
         BigDecimal newPrice = newSnap.getPrice();
-
-        logger.debug("[AlertDebug cid={}] checkPriceChange asin={} oldPrice={} newPrice={}", cid, asin.getAsin(), oldPrice, newPrice);
 
         if (newPrice != null && oldPrice != null && newPrice.compareTo(oldPrice) != 0) {
             BigDecimal changePercent = BigDecimal.ZERO;
@@ -132,9 +128,6 @@ public class AlertService {
     }
 
     private void checkFieldChanges(String cid, AsinModel asin, AsinHistoryModel last, AsinSnapshotDTO newSnap) {
-        logger.debug("[AlertDebug cid={}] checkFieldChanges asin={} lastTitle='{}' newTitle='{}' lastImage={} newImage={} lastAplus={} newAplus={} lastBP.len={} newBP.len={} lastNegRev={} newNegRev={}",
-            cid, asin.getAsin(), truncate(last.getTitle()), truncate(newSnap.getTitle()), last.getImageMd5(), newSnap.getImageMd5(), last.getAplusMd5(), newSnap.getAplusMd5(),
-            lengthOrNull(last.getBulletPoints()), lengthOrNull(newSnap.getBulletPoints()), last.getLatestNegativeReviewMd5(), newSnap.getLatestNegativeReviewMd5());
         compareAndAlert(cid, asin, "TITLE", last.getTitle(), newSnap.getTitle(), "标题变更告警", "旧标题: %s\n新标题: %s");
         compareAndAlert(cid, asin, "MAIN_IMAGE", last.getImageMd5(), newSnap.getImageMd5(), "主图变更", "旧主图MD5: %s\n新主图MD5: %s");
         compareAndAlert(cid, asin, "BULLET_POINTS", last.getBulletPoints(), newSnap.getBulletPoints(), "五点要点变更", "旧五点:\n%s\n新五点:\n%s");
@@ -143,7 +136,6 @@ public class AlertService {
     }
 
     private void compareAndAlert(String cid, AsinModel asin, String alertType, String oldValue, String newValue, String dingTalkTitle, String dingTalkFormat) {
-        logger.debug("[AlertDebug cid={}] compareAndAlert asin={} type={} old='{}' new='{}' equal={}", cid, asin.getAsin(), alertType, truncate(oldValue), truncate(newValue), Objects.equals(oldValue, newValue));
         if (newValue != null && !Objects.equals(oldValue, newValue)) {
             ChangeAlert alert = new ChangeAlert(asin.getId(), alertType, oldValue, newValue);
             changeAlertRepository.save(alert);
