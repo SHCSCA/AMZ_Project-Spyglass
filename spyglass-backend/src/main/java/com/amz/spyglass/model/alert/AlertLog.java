@@ -42,12 +42,10 @@ public class AlertLog extends BaseEntityModel {
     @Column(name = "alert_at", nullable = false)
     private Instant alertAt = Instant.now();
 
-    @Lob
-    @Column(name = "old_value")
+    @Column(name = "old_value", columnDefinition = "TEXT")
     private String oldValue;
 
-    @Lob
-    @Column(name = "new_value")
+    @Column(name = "new_value", columnDefinition = "TEXT")
     private String newValue;
 
     @Column(name = "change_percent", precision = 8, scale = 2)

@@ -25,12 +25,10 @@ public class ChangeAlert extends BaseEntityModel {
     @Column(name = "alert_type", nullable = false, length = 64)
     private String alertType;
 
-    @Lob
-    @Column(name = "old_value")
+    @Column(name = "old_value", columnDefinition = "TEXT")
     private String oldValue;
 
-    @Lob
-    @Column(name = "new_value")
+    @Column(name = "new_value", columnDefinition = "TEXT")
     private String newValue;
 
     @Column(name = "alert_at", nullable = false)
