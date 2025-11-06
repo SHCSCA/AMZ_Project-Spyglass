@@ -79,11 +79,6 @@
             <version>5.6.3</version>
         </dependency>
         <dependency>
-            <!-- Flyway：数据库迁移 -->
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-core</artifactId>
-        </dependency>
-        <dependency>
             <!-- springdoc-openapi：升级到 2.7.0 (最新稳定版) 完全支持 Spring Boot 3.5.0，修复运行时 schema 生成异常 -->
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>

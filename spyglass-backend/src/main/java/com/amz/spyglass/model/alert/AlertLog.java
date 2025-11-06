@@ -42,12 +42,10 @@ public class AlertLog extends BaseEntityModel {
     @Column(name = "alert_at", nullable = false)
     private Instant alertAt = Instant.now();
 
-    @Lob
-    @Column(name = "old_value")
+    @Column(name = "old_value", columnDefinition = "TEXT")
     private String oldValue;
 
-    @Lob
-    @Column(name = "new_value")
+    @Column(name = "new_value", columnDefinition = "TEXT")
     private String newValue;
 
     @Column(name = "change_percent", precision = 8, scale = 2)
@@ -59,7 +57,7 @@ public class AlertLog extends BaseEntityModel {
     @Column(name = "context_json", columnDefinition = "JSON")
     private String contextJson; // 直接存 JSON 字符串
 
-    @Lob
-    @Column(name = "message")
+    // 明确指定 TEXT，避免 Hibernate 在 validate 阶段期待 tinytext 导致类型不匹配
+    @Column(name = "message", columnDefinition = "TEXT")
     private String message;
 }

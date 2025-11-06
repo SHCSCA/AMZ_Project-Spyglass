@@ -1,8 +1,8 @@
 package com.amz.spyglass.model;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 /**
@@ -12,8 +12,8 @@ import lombok.NoArgsConstructor;
  * @version 1.0.0
  * @since 2025-10-29
  */
-@Getter
-@Setter
+@Data
+@EqualsAndHashCode(callSuper = false)
 @NoArgsConstructor
 @Entity
 @Table(name = "asin")

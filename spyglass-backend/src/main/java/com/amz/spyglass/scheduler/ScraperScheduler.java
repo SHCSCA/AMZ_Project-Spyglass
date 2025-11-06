@@ -51,7 +51,9 @@ public class ScraperScheduler {
 
         /**
      * 批量调度所有 ASIN 的抓取任务。
-     * fixedDelayString：上一次执行"结束"到下一次"开始"之间的间隔（默认 14400000 ms ≈ 4 小时）。
+     * 调度策略：
+     *  1. 项目启动时立即执行一次（initialDelay = 10秒，确保数据库与Bean完全初始化）
+     *  2. 后续每天凌晨 4:00 (UTC) 自动执行（cron = "0 0 4 * * ?"）
      * 
      * 流程：
      *  1. 读取数据库中全部 ASIN
@@ -68,11 +70,12 @@ public class ScraperScheduler {
      *  - 事务隔离：一个 ASIN 失败不会回滚其他 ASIN 的数据
      *  - 异常隔离：try-catch 确保单个失败不影响整体调度
      */
-    @Scheduled(fixedDelayString = "${scraper.fixedDelayMs:14400000}", initialDelayString = "${scraper.initialDelayMs:0}")
+    @Scheduled(cron = "0 0 4 * * ?", zone = "UTC")
+    @Scheduled(initialDelay = 10000, fixedDelay = Long.MAX_VALUE) // 启动后10秒执行一次，后续不再重复（fixedDelay设为极大值）
     public void runAll() {
         long start = System.currentTimeMillis();
-    log.info("========================================");
-    log.info("[Scheduler] 开始批量调度抓取任务 (fixedDelay={}ms)...", getConfiguredDelay());
+        log.info("========================================");
+        log.info("[Scheduler] 开始批量调度抓取任务（启动时立即执行 + 每天UTC凌晨4点）...");
         java.util.List<AsinModel> all = asinRepository.findAll();
         int totalCount = all.size();
         int submittedCount = 0;

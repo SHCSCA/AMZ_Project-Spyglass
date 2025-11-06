@@ -14,12 +14,11 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
     properties:
       hibernate:
-        # 已弃用MySQL8Dialect，保持注释让Hibernate自动检测
-        # dialect: org.hibernate.dialect.MySQLDialect
-    open-in-view: false # 关闭 Open-In-View 以避免在视图渲染阶段执行懒加载查询
+        format_sql: false
+    open-in-view: false
   flyway:
     enabled: false
 
@@ -31,8 +30,8 @@ logging:
   config: classpath:logback-spring.xml
   level:
     root: INFO
-    org.springframework.web: DEBUG
-    com.amz.spyglass: DEBUG
+    org.springframework.web: INFO
+    com.amz.spyglass: INFO
 
 # Actuator 管理端点配置
 management:
