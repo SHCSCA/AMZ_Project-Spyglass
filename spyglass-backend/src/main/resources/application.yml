@@ -19,6 +19,8 @@ spring:
       hibernate:
         format_sql: false
     open-in-view: false
+  flyway:
+    enabled: false
 
 server:
   port: ${PORT:8081}
