@@ -59,7 +59,7 @@ public class AlertLog extends BaseEntityModel {
     @Column(name = "context_json", columnDefinition = "JSON")
     private String contextJson; // 直接存 JSON 字符串
 
-    @Lob
-    @Column(name = "message")
+    // 明确指定 TEXT，避免 Hibernate 在 validate 阶段期待 tinytext 导致类型不匹配
+    @Column(name = "message", columnDefinition = "TEXT")
     private String message;
 }
