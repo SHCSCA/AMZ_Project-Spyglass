@@ -8,8 +8,9 @@ import io.swagger.v3.oas.models.OpenAPI;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
-import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -31,6 +32,8 @@ public class DebugController {
     private final AsinHistoryRepository historyRepository;
     private final ApplicationContext applicationContext; // 用于检测 OpenAPI Bean 与映射
     private final javax.sql.DataSource dataSource; // 用于执行原生 SQL 查询表结构
+    @Value("${server.port:8080}")
+    private int serverPort;
 
     /**
      * 手动触发单个 ASIN 抓取（异步），返回是否提交成功。
@@ -168,23 +171,31 @@ public class DebugController {
         java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
         boolean beanExists = applicationContext.getBeanNamesForType(OpenAPI.class).length > 0;
         result.put("openApiBeanExists", beanExists);
-        // 检测是否已注册 /v3/api-docs
-        boolean apiDocsMapped = false;
+
+        // 新的检测策略：直接 HTTP 请求 /v3/api-docs 判断是否可访问（比遍历 HandlerMapping 更可靠）
+        boolean httpReachable = false;
+        Integer httpStatus = null;
+        String fetchError = null;
         try {
-            RequestMappingHandlerMapping mapping = applicationContext.getBean(RequestMappingHandlerMapping.class);
-            apiDocsMapped = false;
-            for (var info : mapping.getHandlerMethods().keySet()) {
-                var patternsCondition = info.getPatternsCondition();
-                if (patternsCondition == null) continue;
-                for (String p : patternsCondition.getPatterns()) {
-                    if ("/v3/api-docs".equals(p)) { apiDocsMapped = true; break; }
-                }
-                if (apiDocsMapped) break;
+            java.net.URI uri = java.net.URI.create("http://127.0.0.1:" + serverPort + "/v3/api-docs");
+            java.net.URL url = uri.toURL();
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(1500);
+            conn.setReadTimeout(2000);
+            conn.setRequestMethod("GET");
+            httpStatus = conn.getResponseCode();
+            if (httpStatus != null && httpStatus == 200) {
+                httpReachable = true;
             }
         } catch (Exception e) {
-            log.warn("[Debug] 检测 /v3/api-docs 映射异常: {}", e.getMessage());
+            fetchError = e.getMessage();
+            log.debug("[Debug] /v3/api-docs HTTP探测失败: {}", fetchError);
         }
-        result.put("apiDocsMapped", apiDocsMapped);
+        result.put("apiDocsMapped", httpReachable); // 语义保持原键名
+        result.put("apiDocsHttpStatus", httpStatus);
+        result.put("apiDocsHttpError", fetchError);
+        result.put("detectionMethod", "http-direct");
+
         // 读取 springdoc 版本（若存在）
         String springdocVersion = null;
         try {
@@ -194,7 +205,12 @@ public class DebugController {
             }
         } catch (ClassNotFoundException ignored) {}
         result.put("springdocVersion", springdocVersion);
-        return ResponseEntity.ok(result);
+
+        // 附加提示：若 Bean 存在但 httpReachable=false，可能是反向代理路径调整或安全拦截
+        if (beanExists && !httpReachable) {
+            result.put("note", "OpenAPI Bean 存在但无法通过本地 HTTP 访问 /v3/api-docs，检查端口/反向代理/安全过滤");
+        }
+        return new ResponseEntity<>(result, HttpStatus.OK);
     }
 
     /**
