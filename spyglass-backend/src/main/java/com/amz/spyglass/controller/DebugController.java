@@ -172,9 +172,15 @@ public class DebugController {
         boolean apiDocsMapped = false;
         try {
             RequestMappingHandlerMapping mapping = applicationContext.getBean(RequestMappingHandlerMapping.class);
-            apiDocsMapped = mapping.getHandlerMethods().keySet().stream()
-                .anyMatch(info -> info.getPatternsCondition() != null &&
-                    info.getPatternsCondition().getPatterns().stream().anyMatch(p -> p.equals("/v3/api-docs")));
+            apiDocsMapped = false;
+            for (var info : mapping.getHandlerMethods().keySet()) {
+                var patternsCondition = info.getPatternsCondition();
+                if (patternsCondition == null) continue;
+                for (String p : patternsCondition.getPatterns()) {
+                    if ("/v3/api-docs".equals(p)) { apiDocsMapped = true; break; }
+                }
+                if (apiDocsMapped) break;
+            }
         } catch (Exception e) {
             log.warn("[Debug] 检测 /v3/api-docs 映射异常: {}", e.getMessage());
         }
@@ -490,6 +496,136 @@ public class DebugController {
                 .toList());
         }
         
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * 查询 alert_log 表结构与统计信息（用于生产环境验证字段长度与告警写入情况）
+     */
+    @GetMapping("/alert-log/info")
+    public ResponseEntity<java.util.Map<String, Object>> getAlertLogInfo() {
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        try (java.sql.Connection conn = dataSource.getConnection();
+             java.sql.Statement stmt = conn.createStatement()) {
+
+            // 1. 表结构
+            String structureSql = "SELECT COLUMN_NAME, COLUMN_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE " +
+                    "FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'alert_log' ORDER BY ORDINAL_POSITION";
+            java.util.List<java.util.Map<String, Object>> columns = new java.util.ArrayList<>();
+            try (java.sql.ResultSet rs = stmt.executeQuery(structureSql)) {
+                while (rs.next()) {
+                    java.util.Map<String, Object> col = new java.util.LinkedHashMap<>();
+                    col.put("name", rs.getString("COLUMN_NAME"));
+                    col.put("type", rs.getString("COLUMN_TYPE"));
+                    col.put("maxLength", rs.getObject("CHARACTER_MAXIMUM_LENGTH"));
+                    col.put("nullable", rs.getString("IS_NULLABLE"));
+                    columns.add(col);
+                }
+            }
+            result.put("columns", columns);
+
+            // 2. 总记录数
+            try (java.sql.ResultSet rs = stmt.executeQuery("SELECT COUNT(*) total FROM alert_log")) {
+                if (rs.next()) {
+                    result.put("totalRecords", rs.getInt("total"));
+                }
+            }
+
+            // 3. 按 alert_type 分组
+            java.util.Map<String, Integer> byType = new java.util.LinkedHashMap<>();
+            try (java.sql.ResultSet rs = stmt.executeQuery("SELECT alert_type, COUNT(*) cnt FROM alert_log GROUP BY alert_type")) {
+                while (rs.next()) {
+                    byType.put(rs.getString("alert_type"), rs.getInt("cnt"));
+                }
+            }
+            result.put("countByType", byType);
+
+            // 4. 最近5条
+            String recentSql = "SELECT id, asin_id, alert_type, LENGTH(old_value) old_len, LENGTH(new_value) new_len, " +
+                    "LEFT(old_value,50) old_preview, LEFT(new_value,50) new_preview, created_at FROM alert_log ORDER BY created_at DESC LIMIT 5";
+            java.util.List<java.util.Map<String, Object>> recent = new java.util.ArrayList<>();
+            try (java.sql.ResultSet rs = stmt.executeQuery(recentSql)) {
+                while (rs.next()) {
+                    java.util.Map<String, Object> rec = new java.util.LinkedHashMap<>();
+                    rec.put("id", rs.getLong("id"));
+                    rec.put("asinId", rs.getLong("asin_id"));
+                    rec.put("alertType", rs.getString("alert_type"));
+                    rec.put("oldLength", rs.getInt("old_len"));
+                    rec.put("newLength", rs.getInt("new_len"));
+                    rec.put("oldPreview", rs.getString("old_preview"));
+                    rec.put("newPreview", rs.getString("new_preview"));
+                    rec.put("createdAt", rs.getTimestamp("created_at"));
+                    recent.add(rec);
+                }
+            }
+            result.put("recentRecords", recent);
+
+            result.put("success", true);
+        } catch (Exception e) {
+            log.error("[Debug] 查询 alert_log 表信息失败: {}", e.getMessage(), e);
+            result.put("success", false);
+            result.put("error", e.getMessage());
+        }
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * 查询 asin_history 表结构与最近快照（便于确认调度是否写入快照）
+     */
+    @GetMapping("/asin-history/info")
+    public ResponseEntity<java.util.Map<String, Object>> getAsinHistoryInfo() {
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        try (java.sql.Connection conn = dataSource.getConnection();
+             java.sql.Statement stmt = conn.createStatement()) {
+
+            // 表结构
+            String structureSql = "SELECT COLUMN_NAME, COLUMN_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE " +
+                    "FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'asin_history' ORDER BY ORDINAL_POSITION";
+            java.util.List<java.util.Map<String, Object>> columns = new java.util.ArrayList<>();
+            try (java.sql.ResultSet rs = stmt.executeQuery(structureSql)) {
+                while (rs.next()) {
+                    java.util.Map<String, Object> col = new java.util.LinkedHashMap<>();
+                    col.put("name", rs.getString("COLUMN_NAME"));
+                    col.put("type", rs.getString("COLUMN_TYPE"));
+                    col.put("maxLength", rs.getObject("CHARACTER_MAXIMUM_LENGTH"));
+                    col.put("nullable", rs.getString("IS_NULLABLE"));
+                    columns.add(col);
+                }
+            }
+            result.put("columns", columns);
+
+            // 总数
+            try (java.sql.ResultSet rs = stmt.executeQuery("SELECT COUNT(*) total FROM asin_history")) {
+                if (rs.next()) {
+                    result.put("totalRecords", rs.getInt("total"));
+                }
+            }
+
+            // 最近5条快照
+            String recentSql = "SELECT id, asin_id, price, snapshot_at, LENGTH(title) title_len, LENGTH(bullet_points) bp_len, inventory " +
+                    "FROM asin_history ORDER BY snapshot_at DESC LIMIT 5";
+            java.util.List<java.util.Map<String, Object>> recent = new java.util.ArrayList<>();
+            try (java.sql.ResultSet rs = stmt.executeQuery(recentSql)) {
+                while (rs.next()) {
+                    java.util.Map<String, Object> rec = new java.util.LinkedHashMap<>();
+                    rec.put("id", rs.getLong("id"));
+                    rec.put("asinId", rs.getLong("asin_id"));
+                    rec.put("price", rs.getBigDecimal("price"));
+                    rec.put("snapshotAt", rs.getTimestamp("snapshot_at"));
+                    rec.put("titleLength", rs.getInt("title_len"));
+                    rec.put("bulletPointsLength", rs.getInt("bp_len"));
+                    rec.put("inventory", rs.getObject("inventory"));
+                    recent.add(rec);
+                }
+            }
+            result.put("recentSnapshots", recent);
+
+            result.put("success", true);
+        } catch (Exception e) {
+            log.error("[Debug] 查询 asin_history 表信息失败: {}", e.getMessage(), e);
+            result.put("success", false);
+            result.put("error", e.getMessage());
+        }
         return ResponseEntity.ok(result);
     }
 }
