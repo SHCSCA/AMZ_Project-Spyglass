@@ -4,6 +4,7 @@ import com.amz.spyglass.dto.AsinRequest;
 import com.amz.spyglass.dto.AsinResponse;
 import com.amz.spyglass.model.AsinModel;
 import com.amz.spyglass.repository.AsinRepository;
+import com.amz.spyglass.repository.AsinHistoryRepository;
 import com.amz.spyglass.repository.AsinGroupRepository;
 import com.amz.spyglass.model.AsinGroupModel;
 import io.swagger.v3.oas.annotations.Operation;
@@ -56,6 +57,7 @@ public class AsinController {
 
     private final AsinRepository asinRepository;
     private final AsinGroupRepository groupRepository;
+    private final AsinHistoryRepository asinHistoryRepository;
 
     /**
      * 获取所有监控中的ASIN商品列表
@@ -157,6 +159,43 @@ public class AsinController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/{id}")
+    @Operation(summary = "获取单个 ASIN 的详情", description = "根据主键 ID 返回单个 ASIN 的基础信息（不包含历史快照）。",
+        responses = {
+            @ApiResponse(responseCode = "200", description = "成功获取 ASIN", content = @Content(schema = @Schema(implementation = AsinResponse.class))),
+            @ApiResponse(responseCode = "404", description = "未找到指定 ID 的 ASIN")
+        })
+    @Transactional(readOnly = true)
+    public ResponseEntity<AsinResponse> getOne(
+            @Parameter(description = "要查询的 ASIN 的唯一 ID", required = true, example = "1") @PathVariable Long id) {
+        return asinRepository.findById(id)
+                .map(this::toResponse)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /**
+     * 根据 ASIN 编码查询单条记录（按 asin 字段）
+     *
+     * 示例：GET /api/asin/by-asin/B08XXXXX
+     * 返回：与 getOne 类似的 AsinResponse DTO（基础信息，不包含历史快照）
+     */
+    @GetMapping("/by-asin/{asin}")
+    @Operation(summary = "根据 ASIN 编码获取单个 ASIN 的详情", description = "根据 asin 字符串返回单条监控记录的基础信息（不包含历史快照）。",
+        responses = {
+            @ApiResponse(responseCode = "200", description = "成功获取 ASIN", content = @Content(schema = @Schema(implementation = AsinResponse.class))),
+            @ApiResponse(responseCode = "404", description = "未找到指定 ASIN")
+        })
+    @Transactional(readOnly = true)
+    public ResponseEntity<AsinResponse> getByAsinCode(
+            @Parameter(description = "要查询的 ASIN 编码（例如 B08XXXXX）", required = true) @PathVariable String asin) {
+        // 使用仓库的 findByAsin 方法（已通过 @EntityGraph 预加载 group）
+        return asinRepository.findByAsin(asin)
+                .map(this::toResponse)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
     @PutMapping("/{id}/config")
     @Operation(summary = "更新指定 ASIN 的配置", description = "允许更新一个已存在 ASIN 的昵称、库存阈值等配置信息。",
         responses = {
@@ -202,6 +241,24 @@ public class AsinController {
         }
         r.setCreatedAt(a.getCreatedAt());
         r.setUpdatedAt(a.getUpdatedAt());
+        // 尝试加载该 ASIN 的最近一次历史快照（按 snapshotAt 降序），取第一条作为最新值填充到 DTO
+        try {
+            var list = asinHistoryRepository.findByAsinIdOrderBySnapshotAtDesc(a.getId());
+            if (list != null && !list.isEmpty()) {
+                var latest = list.get(0);
+                r.setLatestSnapshotAt(latest.getSnapshotAt());
+                r.setLatestPrice(latest.getPrice());
+                r.setLatestBsr(latest.getBsr());
+                r.setLatestInventory(latest.getInventory());
+                r.setLatestAvgRating(latest.getAvgRating());
+                r.setLatestTotalReviews(latest.getTotalReviews());
+                r.setLatestImageMd5(latest.getImageMd5());
+                r.setLatestAplusMd5(latest.getAplusMd5());
+                r.setLatestNegativeReviewMd5(latest.getLatestNegativeReviewMd5());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load latest history for ASIN ID={} : {}", a.getId(), e.getMessage());
+        }
         return r;
     }
 }

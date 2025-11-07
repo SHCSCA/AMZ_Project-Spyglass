@@ -69,4 +69,33 @@ public class AsinResponse {
      */
     @Schema(description = "更新时间 (UTC ISO-8601)")
     private Instant updatedAt;
+
+    /* --- 最新历史快照（可选） --- */
+    @Schema(description = "最新一次抓取的时间点 (UTC ISO-8601)", nullable = true)
+    private Instant latestSnapshotAt;
+
+    @Schema(description = "最新一次抓取的价格", nullable = true)
+    private String latestPrice;
+
+    @Schema(description = "最新一次抓取的 BSR 排名", nullable = true)
+    private String latestBsr;
+
+    @Schema(description = "最新一次抓取的库存数量（若可用）", nullable = true)
+    private Integer latestInventory;
+
+    @Schema(description = "最新一次抓取的平均评分", nullable = true)
+    private Double latestAvgRating;
+
+    @Schema(description = "最新一次抓取的总评论数", nullable = true)
+    private Integer latestTotalReviews;
+
+    @Schema(description = "最新一次抓取的主图 MD5", nullable = true)
+    private String latestImageMd5;
+
+    @Schema(description = "最新一次抓取的 A+ 内容 MD5", nullable = true)
+    private String latestAplusMd5;
+
+    @Schema(description = "最新一次抓取的最新差评 MD5（用于对比）", nullable = true)
+    private String latestNegativeReviewMd5;
+
 }
