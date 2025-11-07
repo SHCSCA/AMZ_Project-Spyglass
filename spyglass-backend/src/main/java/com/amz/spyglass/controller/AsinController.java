@@ -247,10 +247,10 @@ public class AsinController {
             if (list != null && !list.isEmpty()) {
                 var latest = list.get(0);
                 r.setLatestSnapshotAt(latest.getSnapshotAt());
-                r.setLatestPrice(latest.getPrice());
-                r.setLatestBsr(latest.getBsr());
+                r.setLatestPrice(latest.getPrice() != null ? latest.getPrice().toString() : null);
+                r.setLatestBsr(latest.getBsr() != null ? latest.getBsr().toString() : null);
                 r.setLatestInventory(latest.getInventory());
-                r.setLatestAvgRating(latest.getAvgRating());
+                r.setLatestAvgRating(latest.getAvgRating() != null ? latest.getAvgRating().doubleValue() : null);
                 r.setLatestTotalReviews(latest.getTotalReviews());
                 r.setLatestImageMd5(latest.getImageMd5());
                 r.setLatestAplusMd5(latest.getAplusMd5());
