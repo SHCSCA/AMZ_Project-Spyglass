@@ -203,8 +203,10 @@ public class AsinController {
         }
         var latest = list.get(0);
         AsinHistoryResponse resp = new AsinHistoryResponse();
-        resp.setId(latest.getId());
-        resp.setAsinId(latest.getAsinId());
+    resp.setId(latest.getId());
+    // AsinHistoryModel 持有的是 AsinModel 引用（字段名 asin），没有 asinId 方法，
+    // 这里使用之前查询到的 AsinModel `a` 的 id 来设置关联字段，避免延迟加载导致的问题。
+    resp.setAsinId(a.getId());
         resp.setTitle(latest.getTitle());
         resp.setPrice(latest.getPrice());
         resp.setBsr(latest.getBsr());
