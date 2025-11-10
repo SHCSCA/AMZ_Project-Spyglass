@@ -24,6 +24,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 import com.amz.spyglass.dto.PageResponse;
+import com.amz.spyglass.dto.AsinHistoryResponse;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
@@ -181,19 +182,43 @@ public class AsinController {
      * 返回：与 getOne 类似的 AsinResponse DTO（基础信息，不包含历史快照）
      */
     @GetMapping("/by-asin/{asin}")
-    @Operation(summary = "根据 ASIN 编码获取单个 ASIN 的详情", description = "根据 asin 字符串返回单条监控记录的基础信息（不包含历史快照）。",
+    @Operation(summary = "根据 ASIN 编码获取该 ASIN 的最近一次历史快照", description = "返回与 asin 关联的最新一条历史快照（价格、BSR、库存等）。",
         responses = {
-            @ApiResponse(responseCode = "200", description = "成功获取 ASIN", content = @Content(schema = @Schema(implementation = AsinResponse.class))),
-            @ApiResponse(responseCode = "404", description = "未找到指定 ASIN")
+            @ApiResponse(responseCode = "200", description = "成功获取最新历史快照", content = @Content(schema = @Schema(implementation = AsinHistoryResponse.class))),
+            @ApiResponse(responseCode = "404", description = "未找到指定 ASIN 或无历史快照")
         })
     @Transactional(readOnly = true)
-    public ResponseEntity<AsinResponse> getByAsinCode(
+    public ResponseEntity<AsinHistoryResponse> getByAsinCode(
             @Parameter(description = "要查询的 ASIN 编码（例如 B08XXXXX）", required = true) @PathVariable String asin) {
-        // 使用仓库的 findByAsin 方法（已通过 @EntityGraph 预加载 group）
-        return asinRepository.findByAsin(asin)
-                .map(this::toResponse)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        // 先根据 asin 查找 AsinModel
+        var opt = asinRepository.findByAsin(asin);
+        if (opt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        var a = opt.get();
+        // 按 snapshotAt 降序获取历史快照，取第一条（最新）
+        var list = asinHistoryRepository.findByAsinIdOrderBySnapshotAtDesc(a.getId());
+        if (list == null || list.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        var latest = list.get(0);
+        AsinHistoryResponse resp = new AsinHistoryResponse();
+        resp.setId(latest.getId());
+        resp.setAsinId(latest.getAsinId());
+        resp.setTitle(latest.getTitle());
+        resp.setPrice(latest.getPrice());
+        resp.setBsr(latest.getBsr());
+        resp.setBsrCategory(latest.getBsrCategory());
+        resp.setBsrSubcategory(latest.getBsrSubcategory());
+        resp.setBsrSubcategoryRank(latest.getBsrSubcategoryRank());
+        resp.setInventory(latest.getInventory());
+        resp.setBulletPoints(latest.getBulletPoints());
+        resp.setImageMd5(latest.getImageMd5());
+        resp.setAplusMd5(latest.getAplusMd5());
+        resp.setTotalReviews(latest.getTotalReviews());
+        resp.setAvgRating(latest.getAvgRating());
+        resp.setSnapshotAt(latest.getSnapshotAt());
+        return ResponseEntity.ok(resp);
     }
 
     @PutMapping("/{id}/config")
