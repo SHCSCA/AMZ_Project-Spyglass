@@ -172,6 +172,38 @@ curl 'http://localhost:8081/api/asin/1/reviews?rating=negative&page=0&size=50'
 | `GET /api/asin/{id}/reviews` | `rating=negative` / `page` / `size` | 负面评论过滤（1-3 星）与分页 |
 | `GET /api/asin/{id}/alerts` | `page` / `size` / `type` / `from` / `to` | 指定 ASIN 告警分页 + 类型与时间范围过滤 |
 
+### V2.1 新增 API（成本配置 & 关键词监控）
+
+> 所有端点均已通过 `springdoc-openapi` 自动生成文档，可在 `/swagger-ui/index.html` 中查看交互式说明。
+
+| Method | Path | 描述 |
+| --- | --- | --- |
+| `POST` | `/api/v1/asins/{asin}/costs` | 创建或更新指定 ASIN 的成本配置（FOB、头程、FBA 等）。 |
+| `GET` | `/api/v1/asins/{asin}/costs` | 获取 ASIN 当前生效的成本配置。 |
+| `DELETE` | `/api/v1/asins/{asin}/costs` | 删除成本配置（用于重新录入）。 |
+| `GET` | `/api/v1/asins/{asin}/costs/calculate-profit?price={price}` | 基于现有成本和给定售价计算预估毛利 / 毛利率。 |
+| `POST` | `/api/v1/asins/{asin}/keywords` | 为 ASIN 添加待监控的核心关键词。 |
+| `GET` | `/api/v1/asins/{asin}/keywords` | 列出 ASIN 已配置的所有关键词。 |
+| `PUT` | `/api/v1/asins/{asin}/keywords/{keywordId}` | 更新关键词文本或是否追踪。 |
+| `DELETE` | `/api/v1/asins/{asin}/keywords/{keywordId}` | 删除指定关键词。 |
+
+示例调用：
+
+```
+# 配置成本
+curl -X POST http://localhost:8081/api/v1/asins/B08N5WRWNW/costs \
+	-H 'Content-Type: application/json' \
+	-d '{"purchaseCost":12.5,"shippingCost":2.8,"fbaFee":4.2,"tariffRate":0.06,"otherCost":0.5}'
+
+# 计算利润
+curl 'http://localhost:8081/api/v1/asins/B08N5WRWNW/costs/calculate-profit?price=29.99'
+
+# 添加关键词
+curl -X POST http://localhost:8081/api/v1/asins/B08N5WRWNW/keywords \
+	-H 'Content-Type: application/json' \
+	-d '{"keyword":"standing desk","isTracked":true}'
+```
+
 ### 统一分页响应结构 (PageResponse)
 所有支持分页的端点统一返回如下 JSON 结构（字段含义）：
 

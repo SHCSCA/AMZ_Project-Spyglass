@@ -9,84 +9,88 @@ import org.springframework.web.client.RestTemplate;
 
 import java.net.InetSocketAddress;
 import java.net.Proxy;
-import java.util.Base64;
+import java.time.Duration;
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 @Component
 public class ProxyManager {
 
-    private final ProxyConfig proxyConfig;
-    private final List<ProxyConfig.ProxyProvider> providers;
-    private final AtomicInteger currentIndex = new AtomicInteger(0);
-    
+    private final boolean enabled;
+    private final int failureThreshold;
+    private final Duration cooldown;
+    private final List<ProxyInstance> proxies;
+    private final AtomicInteger cursor = new AtomicInteger();
+
     public ProxyManager(ProxyConfig proxyConfig) {
-        this.proxyConfig = proxyConfig;
-        this.providers = proxyConfig.getProviders();
-    }
-    
-    /**
-     * 获取下一个可用的代理配置
-     */
-    public ProxyConfig.ProxyProvider nextProxy() {
-        if (!proxyConfig.isEnabled() || providers.isEmpty()) {
-            return null;
+        this.enabled = proxyConfig.isEnabled();
+        this.failureThreshold = Math.max(1, proxyConfig.getFailureThreshold());
+        this.cooldown = Duration.ofSeconds(Math.max(1L, proxyConfig.getCooldownSeconds()));
+
+        if (!enabled) {
+            this.proxies = Collections.emptyList();
+            return;
         }
-        
-        int index = currentIndex.getAndIncrement() % providers.size();
-        return providers.get(index);
+
+        this.proxies = proxyConfig.getList().stream()
+                .map(entry -> new ProxyInstance(entry.displayName(), entry.getHost(), entry.getPort(), entry.getUsername(), entry.getPassword()))
+                .toList();
+
+        if (proxies.isEmpty()) {
+            log.warn("代理功能已启用，但未提供任何代理条目。");
+        }
     }
-    
-    /**
-     * 为 RestTemplate 配置代理
-     */
-    public RestTemplate createProxiedRestTemplate(ProxyConfig.ProxyProvider provider) {
+
+    public Optional<ProxyInstance> borrow() {
+        if (!enabled || proxies.isEmpty()) {
+            return Optional.empty();
+        }
+
+        int attempts = proxies.size();
+        for (int i = 0; i < attempts; i++) {
+            int index = Math.floorMod(cursor.getAndIncrement(), proxies.size());
+            ProxyInstance candidate = proxies.get(index);
+            if (candidate.isAvailable()) {
+                return Optional.of(candidate);
+            }
+        }
+
+        // 所有代理都处于熔断状态
+        return Optional.empty();
+    }
+
+    public void recordSuccess(ProxyInstance proxyInstance) {
+        if (proxyInstance != null) {
+            proxyInstance.recordSuccess();
+        }
+    }
+
+    public void recordFailure(ProxyInstance proxyInstance) {
+        if (proxyInstance != null) {
+            proxyInstance.recordFailure(failureThreshold, cooldown);
+        }
+    }
+
+    public RestTemplate createProxiedRestTemplate(ProxyInstance proxyInstance) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        
-        // 解析代理 URL 并配置
-        String proxyUrl = provider.getUrl();
-        String[] parts = proxyUrl.split(":");
-        String host;
-        int port;
-        
-        if (parts.length == 2) {
-            // 格式: host:port
-            host = parts[0];
-            port = Integer.parseInt(parts[1]);
-        } else if (parts.length >= 3) {
-            // 格式: protocol://host:port
-            host = parts[1].replace("//", "");
-            port = Integer.parseInt(parts[2]);
-        } else {
-            throw new IllegalArgumentException("Invalid proxy URL format: " + proxyUrl);
-        }
-        
-        Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(host, port));
+        Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyInstance.getHost(), proxyInstance.getPort()));
         factory.setProxy(proxy);
-        
+
         RestTemplate template = new RestTemplate(factory);
-        
-        // 如果有认证信息，添加代理认证头
-        if (provider.getUsername() != null && provider.getPassword() != null) {
-            String auth = provider.getUsername() + ":" + provider.getPassword();
-            String encodedAuth = Base64.getEncoder().encodeToString(auth.getBytes());
-            
+        String header = proxyInstance.buildProxyHeaderValue();
+        if (header != null) {
             template.getInterceptors().add((request, body, execution) -> {
-                request.getHeaders().add(HttpHeaders.PROXY_AUTHORIZATION,
-                    "Basic " + encodedAuth);
+                request.getHeaders().add(HttpHeaders.PROXY_AUTHORIZATION, header);
                 return execution.execute(request, body);
             });
         }
-        
         return template;
     }
-    
-    /**
-     * 标记代理失败并切换到下一个
-     */
-    public void markProxyFailure(ProxyConfig.ProxyProvider provider) {
-        log.warn("代理失败: {}", provider.getName());
-        // TODO: 实现代理健康检查与自动切换逻辑
+
+    public List<ProxyInstance> getProxies() {
+        return proxies;
     }
 }

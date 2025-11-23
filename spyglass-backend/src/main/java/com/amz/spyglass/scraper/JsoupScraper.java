@@ -4,19 +4,18 @@ import com.amz.spyglass.config.ScraperProperties;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
-import org.springframework.stereotype.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
-import java.net.Authenticator;
-import java.net.PasswordAuthentication;
 
 /**
  * Jsoup 实现的 Scraper（中文注释）
- * 说明：此实现使用 Jsoup 发起请求，并在配置了代理时尝试通过代理发送请求。
- * 注意：对需要代理鉴权的场景，Jsoup 原生对代理鉴权支持有限，目前实现使用 JVM 全局 Authenticator 作为简易方案。
+ * 说明：此实现使用 Jsoup 发起请求，并在配置了代理时通过 {@link ProxyManager} 注入代理与鉴权头。
  */
 @Component
 public class JsoupScraper implements Scraper {
@@ -36,72 +35,31 @@ public class JsoupScraper implements Scraper {
                 .timeout((int) Duration.ofSeconds(20).toMillis())
                 .followRedirects(true);
 
-        // 如果配置了代理，则从 ProxyManager 获取下一个代理并应用到请求
+        ProxyInstance proxy = attachProxy(conn).orElse(null);
         try {
-            com.amz.spyglass.config.ProxyConfig.ProxyProvider provider = proxyManager.nextProxy();
-            if (provider != null) {
-                // 解析 host:port
-                String proxyUrl = provider.getUrl();
-                if (proxyUrl != null && !proxyUrl.isEmpty()) {
-                    String[] parts = proxyUrl.split(":");
-                    String host;
-                    int port;
-                    
-                    if (parts.length == 2) {
-                        // 格式: host:port
-                        host = parts[0];
-                        port = Integer.parseInt(parts[1]);
-                    } else if (parts.length >= 3) {
-                        // 格式: protocol://host:port
-                        host = parts[1].replace("//", "");
-                        port = Integer.parseInt(parts[2]);
-                    } else {
-                        throw new IllegalArgumentException("Invalid proxy URL format: " + proxyUrl);
-                    }
-                    
-                    conn.proxy(host, port);
-                    
-                    // 对于需要认证的代理，使用系统级认证器
-                    if (provider.getUsername() != null && provider.getPassword() != null) {
-                        System.setProperty("http.proxyUser", provider.getUsername());
-                        System.setProperty("http.proxyPassword", provider.getPassword());
-                        System.setProperty("https.proxyUser", provider.getUsername());
-                        System.setProperty("https.proxyPassword", provider.getPassword());
-                        
-                        // 设置认证器
-                        Authenticator.setDefault(new Authenticator() {
-                            @Override
-                            protected PasswordAuthentication getPasswordAuthentication() {
-                                return new PasswordAuthentication(
-                                    provider.getUsername(), 
-                                    provider.getPassword().toCharArray()
-                                );
-                            }
-                        });
-                    }
-                }
-            }
-        } catch (Exception ignored) {}
-
-        Document doc = conn.get();
-        return doc.title();
+            Document doc = conn.get();
+            proxyManager.recordSuccess(proxy);
+            return doc.title();
+        } catch (IOException | RuntimeException ex) {
+            proxyManager.recordFailure(proxy);
+            throw ex;
+        }
     }
 
     @Override
     public AsinSnapshotDTO fetchSnapshot(String url) throws Exception {
         long startMs = System.currentTimeMillis();
         // 随机延迟（降低访问模式特征）
-        try {
-            int min = scraperProperties.getRandomDelayMinMs();
-            int max = scraperProperties.getRandomDelayMaxMs();
-            int delay = min + (int)(ThreadLocalRandom.current().nextDouble() * Math.max(1, (max - min)));
-            Thread.sleep(delay);
-            logger.debug("[Jsoup] 随机延迟 {} ms 后开始抓取 url={}", delay, url);
-        } catch (InterruptedException ignored) {}
+        int min = scraperProperties.getRandomDelayMinMs();
+        int max = scraperProperties.getRandomDelayMaxMs();
+        int delay = min + (int) (ThreadLocalRandom.current().nextDouble() * Math.max(1, (max - min)));
+        sleepQuietly(delay);
+        logger.debug("[Jsoup] 随机延迟 {} ms 后开始抓取 url={}", delay, url);
 
         AsinSnapshotDTO snapshot = null;
         Exception lastEx = null;
         for (int attempt = 1; attempt <= scraperProperties.getMaxRetry(); attempt++) {
+            ProxyInstance proxy = null;
             try {
                 Connection conn = Jsoup.connect(url)
                         .userAgent(randomUserAgent())
@@ -113,10 +71,10 @@ public class JsoupScraper implements Scraper {
                         .header("Pragma", "no-cache")
                         .header("Connection", "keep-alive")
                         .header("Upgrade-Insecure-Requests", "1");
-                        
-                // 使用 ProxyManager 获取代理并应用
-                applyProxy(conn);
+
+                proxy = attachProxy(conn).orElse(null);
                 Document doc = conn.get();
+                proxyManager.recordSuccess(proxy);
                 snapshot = ScrapeParser.parse(doc.html(), url);
                 snapshot.setSnapshotAt(java.time.Instant.now());
 
@@ -129,76 +87,48 @@ public class JsoupScraper implements Scraper {
                 if (!criticalMissing) {
                     break; // 已有部分关键数据，不再重试
                 }
-                // 指数退避
-                long backoff = (long)Math.min(4000, 1000 * Math.pow(2, attempt - 1));
-                try { Thread.sleep(backoff); } catch (InterruptedException ignored) {}
-            } catch (Exception ex) {
+
+                long backoff = (long) Math.min(4000, 1000 * Math.pow(2, attempt - 1));
+                sleepQuietly(backoff);
+            } catch (IOException | RuntimeException ex) {
                 lastEx = ex;
                 logger.warn("[Jsoup] 抓取异常 attempt={} url={} msg={}", attempt, url, ex.getMessage());
-                if (attempt == scraperProperties.getMaxRetry()) throw ex; // 最后一次抛出
-                // 继续重试
-                long backoff = (long)Math.min(4000, 1000 * Math.pow(2, attempt - 1));
-                try { Thread.sleep(backoff); } catch (InterruptedException ignored) {}
+                proxyManager.recordFailure(proxy);
+                if (attempt == scraperProperties.getMaxRetry()) {
+                    throw ex;
+                }
+
+                long backoff = (long) Math.min(4000, 1000 * Math.pow(2, attempt - 1));
+                sleepQuietly(backoff);
             }
         }
 
-        if (snapshot == null) throw lastEx != null ? lastEx : new IllegalStateException("抓取失败且无异常信息 url=" + url);
+        if (snapshot == null) {
+            throw lastEx != null ? lastEx : new IllegalStateException("抓取失败且无异常信息 url=" + url);
+        }
 
-    logger.info("[Jsoup] 抓取完成 summary: title='{}' price={} bsr={} reviews={} rating={} cost={}ms",
-        truncate(snapshot.getTitle(),60), snapshot.getPrice(), snapshot.getBsr(), snapshot.getTotalReviews(), snapshot.getAvgRating(), (System.currentTimeMillis()-startMs));
+        logger.info("[Jsoup] 抓取完成 summary: title='{}' price={} bsr={} reviews={} rating={} cost={}ms",
+                truncate(snapshot.getTitle(), 60), snapshot.getPrice(), snapshot.getBsr(), snapshot.getTotalReviews(), snapshot.getAvgRating(), (System.currentTimeMillis() - startMs));
         return snapshot;
     }
 
-    private void applyProxy(Connection conn) {
-        try {
-            com.amz.spyglass.config.ProxyConfig.ProxyProvider provider = proxyManager.nextProxy();
-            if (provider != null) {
-                String proxyUrl = provider.getUrl();
-                if (proxyUrl != null && !proxyUrl.isEmpty()) {
-                    String[] parts = proxyUrl.split(":");
-                    String host;
-                    int port;
-                    
-                    if (parts.length == 2) {
-                        // 格式: host:port
-                        host = parts[0];
-                        port = Integer.parseInt(parts[1]);
-                    } else if (parts.length >= 3) {
-                        // 格式: protocol://host:port
-                        host = parts[1].replace("//", "");
-                        port = Integer.parseInt(parts[2]);
-                    } else {
-                        throw new IllegalArgumentException("Invalid proxy URL format: " + proxyUrl);
-                    }
-                    
-                    // 始终调用 conn.proxy() 设置代理
-                    conn.proxy(host, port);
-                    
-                    // 对于需要认证的代理，设置系统属性和 Authenticator
-                    if (provider.getUsername() != null && provider.getPassword() != null) {
-                        System.setProperty("http.proxyUser", provider.getUsername());
-                        System.setProperty("http.proxyPassword", provider.getPassword());
-                        System.setProperty("https.proxyUser", provider.getUsername());
-                        System.setProperty("https.proxyPassword", provider.getPassword());
-                        
-                        // 设置 Authenticator 处理代理认证
-                        Authenticator.setDefault(new Authenticator() {
-                            @Override
-                            protected PasswordAuthentication getPasswordAuthentication() {
-                                if (getRequestorType() == RequestorType.PROXY) {
-                                    return new PasswordAuthentication(
-                                        provider.getUsername(), 
-                                        provider.getPassword().toCharArray()
-                                    );
-                                }
-                                return null;
-                            }
-                        });
-                    }
-                }
+    private Optional<ProxyInstance> attachProxy(Connection conn) {
+        Optional<ProxyInstance> borrowed = proxyManager.borrow();
+        borrowed.ifPresent(proxy -> {
+            conn.proxy(proxy.getHost(), proxy.getPort());
+            String header = proxy.buildProxyHeaderValue();
+            if (header != null) {
+                conn.header("Proxy-Authorization", header);
             }
-        } catch (Exception e) {
-            logger.warn("[Jsoup] 代理配置应用失败: {}", e.getMessage());
+        });
+        return borrowed;
+    }
+
+    private void sleepQuietly(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -217,7 +147,7 @@ public class JsoupScraper implements Scraper {
             java.nio.file.Path file = dir.resolve(safeName + "_" + tag + "_" + System.currentTimeMillis() + ".html");
             java.nio.file.Files.writeString(file, doc.outerHtml());
             logger.debug("[Jsoup] 已保存 HTML dump -> {}", file.toAbsolutePath());
-        } catch (Exception e) {
+        } catch (IOException e) {
             logger.warn("[Jsoup] HTML dump 失败: {}", e.getMessage());
         }
     }

@@ -60,4 +60,8 @@ public class AsinSnapshotDTO {
 
     // 商品五点要点（feature bullets），合并为多行文本，每个要点一行
     private String bulletPoints;
+
+    // V2.1 F-DATA-002: 新增促销信息字段
+    private String couponValue;
+    private boolean isLightningDeal;
 }

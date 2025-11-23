@@ -32,4 +32,16 @@ public class ScraperProperties {
 
     /** HTML dump 保留天数 */
     private int htmlDumpRetentionDays = 3;
+
+    /** 最大关键词排名抓取翻页数（默认 5 页） */
+    private int keywordRankMaxPages = 5;
+    /** 是否在解析搜索结果时过滤 Sponsored 广告（默认 true） */
+    private boolean filterSponsored = true;
+
+    /** Selenium 远程 WebDriver 服务地址 */
+    private String seleniumRemoteUrl = "http://selenium:4444/wd/hub";
+    /** Selenium 并发实例上限（默认 2） */
+    private int seleniumMaxSessions = 2;
+    /** 等待获取 Selenium 实例的超时时间（秒） */
+    private long seleniumAcquireTimeoutSeconds = 60;
 }

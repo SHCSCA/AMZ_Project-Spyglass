@@ -1,11 +1,20 @@
 package com.amz.spyglass.model;
 
-import jakarta.persistence.*;
+import java.math.BigDecimal;
+import java.time.Instant;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import java.math.BigDecimal;
-import java.time.Instant;
 
 /**
  * ASIN 历史快照实体
@@ -116,4 +125,16 @@ public class AsinHistoryModel extends BaseEntityModel {
      */
     @Column(nullable = false)
     private Instant snapshotAt;
+
+    /**
+     * V2.1 F-DATA-002: 优惠券面额(例如 "$10 off" 或 "5%")
+     */
+    @Column(name = "coupon_value", length = 64)
+    private String couponValue;
+
+    /**
+     * V2.1 F-DATA-002: 是否正在进行秒杀活动(1=是, 0=否)
+     */
+    @Column(name = "is_lightning_deal")
+    private Boolean isLightningDeal = false;
 }

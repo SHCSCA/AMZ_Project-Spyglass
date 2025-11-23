@@ -1,8 +1,6 @@
 package com.amz.spyglass.scraper;
 
 import com.amz.spyglass.config.ScraperProperties;
-import com.amz.spyglass.scraper.ProxyManager;
-import com.amz.spyglass.config.ProxyConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -46,35 +44,26 @@ public class ImageDownloader {
             return Optional.empty();
         }
 
+        ProxyInstance proxy = proxyManager.borrow().orElse(null);
+        boolean success = false;
         try {
             HttpClient.Builder clientBuilder = HttpClient.newBuilder()
                     .connectTimeout(Duration.ofMillis(scraperProperties.getImageDownloadTimeoutMs()));
 
-            // 使用 ProxyManager 获取请求级代理（如有）并配置到 HttpClient
-            try {
-                ProxyConfig.ProxyProvider provider = proxyManager.nextProxy();
-                if (provider != null) {
-                    String proxyUrl = provider.getUrl();
-                    if (proxyUrl != null && !proxyUrl.isEmpty()) {
-                        String[] parts = proxyUrl.split(":" );
-                        if (parts.length >= 3) {
-                            String host = parts[1].replace("//", "");
-                            int port = Integer.parseInt(parts[2]);
-                            InetSocketAddress addr = new InetSocketAddress(host, port);
-                            clientBuilder.proxy(ProxySelector.of(addr));
+            if (proxy != null) {
+                InetSocketAddress addr = new InetSocketAddress(proxy.getHost(), proxy.getPort());
+                clientBuilder.proxy(ProxySelector.of(addr));
+                if (proxy.isAuthenticationRequired()) {
+                    String username = proxy.getUsername().orElse("");
+                    char[] password = proxy.getPassword().map(String::toCharArray).orElse(new char[0]);
+                    clientBuilder.authenticator(new Authenticator() {
+                        @Override
+                        protected PasswordAuthentication getPasswordAuthentication() {
+                            return new PasswordAuthentication(username, password);
                         }
-                    }
-
-                    if (provider.getUsername() != null && provider.getPassword() != null) {
-                        clientBuilder.authenticator(new java.net.Authenticator() {
-                            @Override
-                            protected PasswordAuthentication getPasswordAuthentication() {
-                                return new PasswordAuthentication(provider.getUsername(), provider.getPassword().toCharArray());
-                            }
-                        });
-                    }
+                    });
                 }
-            } catch (Exception ignored) {}
+            }
 
             HttpClient client = clientBuilder.build();
             HttpRequest req = HttpRequest.newBuilder()
@@ -87,18 +76,30 @@ public class ImageDownloader {
             HttpResponse<byte[]> resp = client.send(req, HttpResponse.BodyHandlers.ofByteArray());
             if (resp.statusCode() >= 200 && resp.statusCode() < 300) {
                 byte[] body = resp.body();
+                success = true;
                 return Optional.of(md5Hex(body));
             } else {
                 logger.warn("image download returned status {} for {}", resp.statusCode(), imageUrl);
                 return Optional.empty();
             }
-        } catch (IOException | InterruptedException ex) {
-            logger.warn("image download failed for {}: {}", imageUrl, ex.getMessage());
+        } catch (InterruptedException ex) {
+            logger.warn("image download interrupted for {}: {}", imageUrl, ex.getMessage());
             Thread.currentThread().interrupt();
+            return Optional.empty();
+        } catch (IOException ex) {
+            logger.warn("image download failed for {}: {}", imageUrl, ex.getMessage());
             return Optional.empty();
         } catch (Exception ex) {
             logger.warn("unexpected error downloading image {}: {}", imageUrl, ex.getMessage());
             return Optional.empty();
+        } finally {
+            if (proxy != null) {
+                if (success) {
+                    proxyManager.recordSuccess(proxy);
+                } else {
+                    proxyManager.recordFailure(proxy);
+                }
+            }
         }
     }
 

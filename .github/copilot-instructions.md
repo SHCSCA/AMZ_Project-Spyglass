@@ -10,9 +10,9 @@
 ## 主要架构（大局观）
 - 后端：Spring Boot（API-first）。核心职责：爬虫调度、数据入库、告警触发与对外 REST API。
 - 爬虫：静态抓取使用 Jsoup，动态/库存抓取使用 Selenium；所有外部请求需通过住宅代理（例如 Bright Data）。
-- 存储：PostgreSQL 保存时序/实体数据（价格、BSR、评论、库存快照等）。
-- 通知：通过钉钉机器人 Webhook 推送告警。
-- 部署：Docker + docker-compose（One-click 启动后端与 PostgreSQL）。
+- 存储：mysql 保存时序/实体数据（价格、BSR、评论、库存快照等）。
+- 通知：通过钉钉机器人 Webhook 推送告警（暂时不实现）。
+- 部署：Docker + docker-compose（One-click 启动后端与 MySQL）。
 
 ## 快速可用路径与命名约定
 - 后端服务（预期）： `spyglass-backend/` 或 `backend/`，Java 源码在 `src/main/java`。

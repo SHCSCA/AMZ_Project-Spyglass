@@ -1,14 +1,19 @@
 package com.amz.spyglass.scraper;
 
+import lombok.extern.slf4j.Slf4j;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Locale;
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 亚马逊商品页面解析器
@@ -27,7 +32,14 @@ import java.util.Locale;
  * @version 2.0.0
  * @since 2025-10-31
  */
+@Slf4j
+@Component
 public class ScrapeParser {
+
+    // V2.1 F-DATA-001: 用于从加购提示中提取数字的正则表达式
+    // "This seller has only 483 of these available." -> 483
+    // "这位卖家最多只能为您提供 483 件商品" -> 483
+    private static final Pattern INVENTORY_ALERT_PATTERN = Pattern.compile("(\\d{1,3}(,\\d{3})*|\\d+)(?!\\d*%)");
 
 
     /**
@@ -341,6 +353,15 @@ public class ScrapeParser {
             }
         } catch (Exception ignored) {}
 
+        // V2.1 F-DATA-002: 解析促销信息
+        String contextId = Optional.ofNullable(doc.baseUri()).orElse(title);
+        log.debug("开始解析促销信息, source={}", contextId);
+        s.setCouponValue(parseCoupon(doc).orElse(null));
+        s.setLightningDeal(parseLightningDeal(doc));
+        if (s.getCouponValue() != null || s.isLightningDeal()) {
+            log.info("检测到促销活动 source={} coupon={} lightningDeal={}", contextId, s.getCouponValue(), s.isLightningDeal());
+        }
+
         return s;
     }
 
@@ -369,5 +390,112 @@ public class ScrapeParser {
         } catch (NoSuchAlgorithmException e) {
             return null;
         }
+    }
+
+    /**
+     * V2.1 F-DATA-002: 解析优惠券信息
+     * 亚马逊页面通常将优惠券信息放在一个带有特定 CSS class 的 span 中。
+     * 例如: <span class="promoPriceBlockMessage">...</span> or <label ... for="coupon-checkbox">...</label>
+     *
+     * @param doc Jsoup Document
+     * @return Optional<String> 包含优惠券面额文本, 如 "$10.00 off" 或 "5% off"
+     */
+    private static Optional<String> parseCoupon(Document doc) {
+        // 策略1: 查找常见的优惠券标签和文本
+        // CSS选择器可能需要根据实际页面结构进行调整
+        Element couponElement = doc.selectFirst("label[for*=coupon] span.a-size-large, span.promoPriceBlockMessage");
+        if (couponElement != null) {
+            String couponText = couponElement.text().trim();
+            log.debug("通过选择器找到 Coupon 元素，文本: '{}'", couponText);
+            if (!couponText.isEmpty()) {
+                // 清理文本，例如 "Save an extra $10.00 with this coupon" -> "$10.00"
+                Pattern pattern = Pattern.compile("(\\$\\d+\\.\\d+|\\d+\\%|\\d+元)");
+                Matcher matcher = pattern.matcher(couponText);
+                if (matcher.find()) {
+                    return Optional.of(matcher.group(1) + " off");
+                }
+                return Optional.of(couponText);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * V2.1 F-DATA-002: 检测是否正在进行秒杀 (Lightning Deal)
+     * 秒杀活动通常有特定的ID或CSS class，例如包含 "dealBadge" 或 "lightningDeal" 字符串的元素。
+     *
+     * @param doc Jsoup Document
+     * @return boolean 如果找到秒杀标识则返回 true
+     */
+    private static boolean parseLightningDeal(Document doc) {
+        // 策略: 查找包含 "deal" 或 "limited time" 等关键词的元素
+        // 这也是一个需要根据实际页面结构灵活调整的选择器
+        Element dealElement = doc.selectFirst("[id*=deal], [class*=deal], [data-deal-id]");
+        if (dealElement != null) {
+            String elementText = dealElement.text().toLowerCase();
+            log.debug("找到疑似 Deal 元素: {}", elementText);
+            // 进一步确认文本内容是否包含秒杀关键词
+            return elementText.contains("deal") || elementText.contains("limited time");
+        }
+        return false;
+    }
+
+    /**
+     * V2.1 F-DATA-001: 从“999加购法”的提示文本中解析真实库存
+     *
+     * @param alertText 从购物车页面捕获的提示信息
+     * @return Optional<Integer> 包含解析出的库存数量，如果未找到则为空
+     */
+    public Optional<Integer> parseInventoryFromAlert(String alertText) {
+        if (alertText == null || alertText.isEmpty()) {
+            return Optional.empty();
+        }
+
+        Matcher matcher = INVENTORY_ALERT_PATTERN.matcher(alertText);
+        if (matcher.find()) {
+            try {
+                String digits = matcher.group(1).replaceAll(",", "");
+                log.debug("从库存提示 '{}' 中解析出数字: {}", alertText, digits);
+                return Optional.of(Integer.parseInt(digits));
+            } catch (NumberFormatException e) {
+                log.error("解析库存数字失败: '{}'", alertText, e);
+            }
+        } else {
+            // PRD F-DATA-001 异常处理: 如果允许购买999，则标记为999+
+            // 这里通过检查文本是否包含 "added to cart" 或类似成功信息来判断
+            String lowerCaseText = alertText.toLowerCase();
+            if (lowerCaseText.contains("added to cart") || lowerCaseText.contains("已加入购物车")) {
+                 log.info("未找到库存限制提示，且加购成功，标记库存为 999+");
+                 return Optional.of(999); // 使用 999 代表库存充足
+            }
+        }
+
+        log.warn("未能在提示文本中找到明确的库存数量: '{}'", alertText);
+        return Optional.empty();
+    }
+
+    /**
+     * V2.1 F-BIZ-001: 从亚马逊搜索结果页面解析指定 ASIN 的页内排名（仅当前页）。
+     * @param doc 搜索结果页 Document
+     * @param targetAsin 目标 ASIN
+     * @return Optional<Integer> 1-based 排名
+     */
+    public Optional<Integer> parseKeywordRank(Document doc, String targetAsin) {
+        if (doc == null || targetAsin == null || targetAsin.isBlank()) {
+            return Optional.empty();
+        }
+        Elements results = doc.select("[data-component-type='s-search-result'][data-asin]");
+        log.debug("关键词排名解析: 检测到 {} 个搜索结果条目", results.size());
+        for (int i = 0; i < results.size(); i++) {
+            Element item = results.get(i);
+            String asin = item.attr("data-asin");
+            if (asin != null && asin.equalsIgnoreCase(targetAsin)) {
+                int rank = i + 1;
+                log.info("目标 ASIN={} 在当前搜索结果页内排名={}", targetAsin, rank);
+                return Optional.of(rank);
+            }
+        }
+        log.debug("目标 ASIN={} 未出现在当前搜索结果页", targetAsin);
+        return Optional.empty();
     }
 }
