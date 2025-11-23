@@ -168,3 +168,37 @@ CREATE TABLE `scrape_task` (
   KEY `idx_scrape_task_status` (`status`),
   CONSTRAINT `fk_scrape_task_asin` FOREIGN KEY (`asin_id`) REFERENCES `asin` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='抓取任务执行记录表';
+
+-- ============================================================
+-- 表名：asin_keywords
+-- 说明：ASIN关键词监控配置表，用于记录需要监控排名的核心关键词
+-- ============================================================
+CREATE TABLE `asin_keywords` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `asin_id` bigint NOT NULL COMMENT '关联ASIN表主键ID',
+  `keyword` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '需监控的核心关键词',
+  `last_organic_rank` int NULL DEFAULT NULL COMMENT '最新自然排名(空值代表未找到)',
+  `last_sponsored_rank` int NULL DEFAULT NULL COMMENT '最新广告排名(空值代表未找到)',
+  `created_at` datetime(6) NOT NULL COMMENT '创建时间',
+  `updated_at` datetime(6) NOT NULL COMMENT '最后更新时间',
+  PRIMARY KEY (`id`) USING BTREE,
+  INDEX `idx_asin_keywords_asin_id`(`asin_id` ASC) USING BTREE,
+  CONSTRAINT `fk_asin_keywords_asin` FOREIGN KEY (`asin_id`) REFERENCES `asin` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'ASIN关键词监控配置表' ROW_FORMAT = Dynamic;
+
+-- ============================================================
+-- 表名：asin_costs
+-- 说明：ASIN成本与利润计算配置表，用于存储FOB和头程等成本信息
+-- ============================================================
+CREATE TABLE `asin_costs` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `asin_id` bigint NOT NULL COMMENT '关联ASIN表主键ID',
+  `fob_cost` decimal(10, 2) NULL DEFAULT 0.00 COMMENT 'FOB采购成本(美元)',
+  `shipping_cost` decimal(10, 2) NULL DEFAULT 0.00 COMMENT '头程运费(美元)',
+  `fba_fee_override` decimal(10, 2) NULL DEFAULT NULL COMMENT 'FBA配送费(可选，若不填则自动估算)',
+  `created_at` datetime(6) NOT NULL COMMENT '创建时间',
+  `updated_at` datetime(6) NOT NULL COMMENT '最后更新时间',
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `ux_asin_costs_asin_id`(`asin_id` ASC) USING BTREE COMMENT '每个ASIN只能有一条成本配置',
+  CONSTRAINT `fk_asin_costs_asin` FOREIGN KEY (`asin_id`) REFERENCES `asin` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'ASIN成本与利润计算配置表' ROW_FORMAT = Dynamic;
