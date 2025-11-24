@@ -27,6 +27,8 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Selenium 抓取器（用于处理 JS 渲染的页面，如库存 / 动态加载价格 / 评价等）。
@@ -44,6 +46,8 @@ public class SeleniumScraper implements Scraper {
     private final Semaphore driverSemaphore;
     private final URL remoteWebDriverUrl;
     private final long acquireTimeoutSeconds;
+
+    private static final Pattern PRICE_PATTERN = Pattern.compile("(\\d{1,3}(?:,\\d{3})*(?:\\.\\d{2})|\\d+\\.\\d{2}|\\d+)");
 
     public SeleniumScraper(ProxyManager proxyManager, ScrapeParser scrapeParser, ScraperProperties scraperProperties) {
         this.proxyManager = proxyManager;
@@ -175,6 +179,9 @@ public class SeleniumScraper implements Scraper {
             if (dto.getPrice() == null) {
                 try {
                     WebElement priceEl = firstPresent(driver,
+                            By.cssSelector("#corePriceDisplay_desktop_feature_div span.a-price span.a-offscreen"),
+                            By.cssSelector("#corePrice_feature_div span.a-price span.a-offscreen"),
+                            By.cssSelector("#corePrice_desktop span.a-price span.a-offscreen"),
                             By.cssSelector("span.a-price[data-a-color=price] span.a-offscreen"),
                             By.cssSelector("#priceblock_ourprice"),
                             By.cssSelector("#priceblock_dealprice"),
@@ -284,8 +291,11 @@ public class SeleniumScraper implements Scraper {
             if (dto.getInventory() == null) {
                 try {
                     WebElement availability = firstPresent(driver,
+                            By.cssSelector("#availabilityInsideBuyBox_feature_div"),
                             By.cssSelector("#availability"),
                             By.cssSelector("#availability_feature_div"),
+                            By.cssSelector("#availability-brief"),
+                            By.cssSelector("#deliveryBlockMessage"),
                             By.cssSelector("#desktop_qualifiedBuyBox_feature_div"));
                     if (availability != null) {
                         String txt = availability.getText().toLowerCase(Locale.ROOT);
@@ -298,6 +308,24 @@ public class SeleniumScraper implements Scraper {
                     }
                 } catch (WebDriverException e) {
                     log.debug("Selenium 解析库存提示失败: {}", e.getMessage());
+                }
+            }
+
+            if (dto.getInventory() == null) {
+                try {
+                    WebElement qtyInput = firstPresent(driver,
+                            By.cssSelector("input#quantity"),
+                            By.cssSelector("input#mobileQuantityStepper-input"),
+                            By.cssSelector("input[name=quantity]"));
+                    if (qtyInput != null) {
+                        String candidate = firstNonEmptyAttr(qtyInput, "data-a-max-quantity", "max", "data-max");
+                        Integer parsed = parseInteger(candidate);
+                        if (parsed != null) {
+                            dto.setInventory(parsed);
+                        }
+                    }
+                } catch (WebDriverException e) {
+                    log.debug("Selenium 通过 quantity 输入框解析库存失败: {}", e.getMessage());
                 }
             }
 
@@ -340,14 +368,52 @@ public class SeleniumScraper implements Scraper {
 
     private BigDecimal parsePrice(String text) {
         if (text == null) return null;
-        String cleaned = text.replaceAll("[^0-9.\\-]", ""); // 修正正则
-        if (cleaned.isEmpty()) return null;
-        try {
-            return new BigDecimal(cleaned);
-        } catch (NumberFormatException e) {
-            log.debug("Selenium 解析价格失败: {}", e.getMessage());
+        Matcher matcher = PRICE_PATTERN.matcher(text.replace('\u00a0', ' '));
+        if (matcher.find()) {
+            String candidate = matcher.group(1).replace(",", "");
+            try {
+                return new BigDecimal(candidate);
+            } catch (NumberFormatException e) {
+                log.debug("Selenium 解析价格失败: {}", e.getMessage());
+            }
+        }
+        return null;
+    }
+
+    private String firstNonEmptyAttr(WebElement element, String... attrs) {
+        if (element == null || attrs == null) {
             return null;
         }
+        for (String attr : attrs) {
+            if (attr == null) {
+                continue;
+            }
+            String value = element.getDomAttribute(attr);
+            if (!isBlank(value)) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
+    private Integer parseInteger(String text) {
+        if (isBlank(text)) {
+            return null;
+        }
+        String digits = text.replaceAll("[^0-9]", "");
+        if (digits.isEmpty()) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(digits);
+        } catch (NumberFormatException e) {
+            log.debug("Selenium 解析库存数字失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     private String md5Hex(String input) {

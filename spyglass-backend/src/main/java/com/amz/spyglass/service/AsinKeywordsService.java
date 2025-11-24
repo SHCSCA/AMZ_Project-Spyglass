@@ -139,8 +139,14 @@ public class AsinKeywordsService {
         AsinKeywords keyword = asinKeywordsRepository.findByIdAndAsin_Id(keywordId, asinModel.getId())
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Keyword " + keywordId + " not found for ASIN " + asin));
+        
+        // V2.1 F-BIZ-001 Hotfix: 增加对关联 ASIN 的空值检查
+        if (keyword.getAsin() == null || keyword.getAsin().getAsin() == null) {
+            log.error("关键词 ID: {} 关联的 ASIN 对象或 ASIN 字符串为空，无法执行排名抓取。", keyword.getId());
+            throw new IllegalStateException("Keyword " + keyword.getId() + " is corrupted and has no associated ASIN.");
+        }
 
-        String asinCode = asinModel.getAsin();
+        String asinCode = keyword.getAsin().getAsin();
         LocalDate today = LocalDate.now();
 
         try {
