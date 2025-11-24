@@ -1,12 +1,13 @@
 package com.amz.spyglass.scraper;
 
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.junit.jupiter.api.Test;
-
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
 
 class ScrapeParserTest {
 

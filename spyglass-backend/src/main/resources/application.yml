@@ -8,9 +8,9 @@ spring:
   datasource:
     # 修正默认数据库名拼写 (原 amzspaglass ) -> spyglass，避免误连错误库导致数据不一致
     # 强烈建议生产通过环境变量覆盖所有敏感信息
-    url: jdbc:mysql://${DB_HOST:shcamz.xyz}:${DB_PORT:3306}/${DB_NAME:spyglass}?useSSL=false&serverTimezone=UTC&characterEncoding=utf8
-    username: ${DB_USER:spyglass}
-    password: ${DB_PASSWORD:changeMe!}
+    url: jdbc:mysql://${DB_HOST:shcamz.xyz}:${DB_PORT:3306}/${DB_NAME:amzspaglass}?useSSL=false&serverTimezone=UTC&characterEncoding=utf8&allowPublicKeyRetrieval=true
+    username: ${DB_USER:amzspaglass}
+    password: ${DB_PASSWORD:RYna5tjK7nKwZd7J}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
