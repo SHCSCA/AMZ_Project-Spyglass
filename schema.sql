@@ -97,6 +97,41 @@ CREATE TABLE `asin_group`  (
 ) ENGINE = InnoDB AUTO_INCREMENT = 3 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'ASIN 业务分组表：将多个竞品 ASIN 归类到同一自有产品的竞品池' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
+-- Table structure for asin_keywords
+-- ----------------------------
+DROP TABLE IF EXISTS `asin_keywords`;
+CREATE TABLE `asin_keywords` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `asin_id` bigint NOT NULL COMMENT '关联ASIN表主键ID',
+    `keyword` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '关键词',
+    `is_tracked` tinyint(1) NOT NULL DEFAULT '1' COMMENT '是否追踪排名 (1:是, 0:否)',
+    `created_at` datetime(6) NOT NULL COMMENT '创建时间',
+    `updated_at` datetime(6) NOT NULL COMMENT '最后更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `ux_asin_keyword` (`asin_id`, `keyword`),
+    CONSTRAINT `fk_asin_keywords_asin` FOREIGN KEY (`asin_id`) REFERENCES `asin` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='V2.1 ASIN关键词表';
+
+
+-- ----------------------------
+-- Table structure for keyword_rank_history
+-- ----------------------------
+DROP TABLE IF EXISTS `keyword_rank_history`;
+CREATE TABLE `keyword_rank_history` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `asin_keyword_id` bigint NOT NULL COMMENT '关联 asin_keywords.id',
+    `scrape_date` date NOT NULL COMMENT '抓取日期',
+    `natural_rank` int NOT NULL DEFAULT '-1' COMMENT '自然排名, -1表示未找到',
+    `sponsored_rank` int NOT NULL DEFAULT '-1' COMMENT '广告排名, -1表示未找到',
+    `page` int NOT NULL DEFAULT '-1' COMMENT '排名所在页数, -1表示未找到',
+    `created_at` datetime(6) NOT NULL COMMENT '创建时间',
+    `updated_at` datetime(6) NOT NULL COMMENT '最后更新时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_keyword_rank_history_date_asin` (`scrape_date`, `asin_keyword_id`),
+    CONSTRAINT `fk_rank_history_keyword` FOREIGN KEY (`asin_keyword_id`) REFERENCES `asin_keywords` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='V2.1 关键词排名历史记录表';
+
+-- ----------------------------
 -- Table structure for asin_history
 -- ----------------------------
 DROP TABLE IF EXISTS `asin_history`;
@@ -126,23 +161,6 @@ CREATE TABLE `asin_history`  (
   INDEX `idx_asin_history_snapshot_at`(`snapshot_at` ASC) USING BTREE,
   CONSTRAINT `fk_asin_history_asin` FOREIGN KEY (`asin_id`) REFERENCES `asin` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE = InnoDB AUTO_INCREMENT = 237 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'ASIN 监控数据历史快照' ROW_FORMAT = Dynamic;
-
--- ----------------------------
--- Table structure for asin_keywords
--- ----------------------------
-DROP TABLE IF EXISTS `asin_keywords`;
-CREATE TABLE `asin_keywords`  (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `asin_id` bigint NOT NULL COMMENT '关联ASIN表主键ID',
-  `keyword` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '需监控的核心关键词',
-  `is_tracked` tinyint(1) NOT NULL DEFAULT 1,
-  `created_at` datetime(6) NOT NULL COMMENT '创建时间',
-  `updated_at` datetime(6) NOT NULL COMMENT '最后更新时间',
-  PRIMARY KEY (`id`) USING BTREE,
-  INDEX `idx_asin_keywords_asin_id`(`asin_id` ASC) USING BTREE,
-  UNIQUE INDEX `ux_asin_keywords_asin_keyword`(`asin_id` ASC, `keyword` ASC) USING BTREE,
-  CONSTRAINT `fk_asin_keywords_asin` FOREIGN KEY (`asin_id`) REFERENCES `asin` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'ASIN关键词监控配置表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Table structure for change_alert

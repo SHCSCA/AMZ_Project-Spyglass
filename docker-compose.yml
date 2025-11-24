@@ -21,6 +21,22 @@ services:
       timeout: 5s
       retries: 5
       start_period: 40s
+    depends_on:
+      - selenium
+
+  selenium:
+    image: selenium/standalone-chrome:latest
+    container_name: spyglass-selenium
+    restart: always
+    ports:
+      - "4444:4444"
+      - "7900:7900"
+    shm_size: "2gb"
+    environment:
+      - SE_NODE_MAX_SESSIONS=2
+      - SE_NODE_OVERRIDE_MAX_SESSIONS=true
+      - SE_SESSION_REQUEST_TIMEOUT=300
+      - SE_VNC_NO_PASSWORD=1
 
 # 使用外部 MySQL，示例 .env 内容：
 # DB_HOST=your.mysql.host
