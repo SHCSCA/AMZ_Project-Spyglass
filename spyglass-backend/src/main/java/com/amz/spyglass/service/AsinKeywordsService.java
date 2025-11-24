@@ -1,6 +1,16 @@
 package com.amz.spyglass.service;
 
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.amz.spyglass.dto.AsinKeywordDto;
+import com.amz.spyglass.dto.KeywordRankHistoryDto;
 import com.amz.spyglass.dto.KeywordRankResponse;
 import com.amz.spyglass.model.AsinKeywords;
 import com.amz.spyglass.model.AsinModel;
@@ -9,16 +19,9 @@ import com.amz.spyglass.repository.AsinKeywordsRepository;
 import com.amz.spyglass.repository.AsinRepository;
 import com.amz.spyglass.repository.KeywordRankHistoryRepository;
 import com.amz.spyglass.scraper.SeleniumScraper;
+
 import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDate;
-import java.util.List;
-import java.util.Objects;
-import java.util.stream.Collectors;
 
 /**
  * V2.1 F-BIZ-001: 管理 ASIN 关键词的服务。
@@ -124,6 +127,35 @@ public class AsinKeywordsService {
         }
         asinKeywordsRepository.deleteById(keywordId);
         log.info("成功删除关键词 ID: {}", keywordId);
+    }
+
+    /**
+     * 获取指定关键词的排名历史记录。
+     *
+     * @param keywordId 关键词记录的唯一ID
+     * @return 排名历史记录列表
+     */
+    @Transactional(readOnly = true)
+    public List<KeywordRankHistoryDto> getKeywordRankHistory(Long keywordId) {
+        Objects.requireNonNull(keywordId, "keywordId must not be null");
+
+        if (!asinKeywordsRepository.existsById(keywordId)) {
+            throw new EntityNotFoundException("Keyword not found with id: " + keywordId);
+        }
+
+        return keywordRankHistoryRepository.findByAsinKeyword_IdOrderByScrapeDateDesc(keywordId).stream()
+                .map(this::convertToHistoryDto)
+                .collect(Collectors.toList());
+    }
+
+    private KeywordRankHistoryDto convertToHistoryDto(KeywordRankHistory history) {
+        KeywordRankHistoryDto dto = new KeywordRankHistoryDto();
+        dto.setId(history.getId());
+        dto.setScrapeDate(history.getScrapeDate());
+        dto.setNaturalRank(history.getNaturalRank());
+        dto.setSponsoredRank(history.getSponsoredRank());
+        dto.setPage(history.getPage());
+        return dto;
     }
 
     /**

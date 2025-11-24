@@ -1,7 +1,18 @@
 package com.amz.spyglass.scraper;
 
-import com.amz.spyglass.config.ScraperProperties;
-import lombok.extern.slf4j.Slf4j; // 添加日志注解导入
+import java.math.BigDecimal;
+import java.net.MalformedURLException; // 添加日志注解导入
+import java.net.URI;
+import java.net.URL;
+import java.time.Duration;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import org.openqa.selenium.By;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.NoSuchElementException;
@@ -17,18 +28,9 @@ import org.openqa.selenium.support.ui.WebDriverWait;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URL;
-import java.time.Duration;
-import java.util.List;
-import java.util.Locale;
-import java.util.Optional;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import com.amz.spyglass.config.ScraperProperties;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Selenium 抓取器（用于处理 JS 渲染的页面，如库存 / 动态加载价格 / 评价等）。
@@ -519,7 +521,9 @@ public class SeleniumScraper implements Scraper {
 
                 WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(25));
                 try {
-                    wait.until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("[data-component-type='s-search-result']")));
+                    // 兼容多种选择器，防止因页面结构差异导致误判超时
+                    wait.until(ExpectedConditions.presenceOfElementLocated(
+                            By.cssSelector("[data-component-type='s-search-result'], div.s-result-item[data-asin]")));
                 } catch (TimeoutException te) {
                     log.warn("关键词='{}' 第 {} 页加载超时，终止后续翻页", keyword, page);
                     break;

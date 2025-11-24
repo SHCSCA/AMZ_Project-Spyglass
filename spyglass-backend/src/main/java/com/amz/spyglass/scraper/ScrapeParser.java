@@ -617,18 +617,37 @@ public class ScrapeParser {
         if (doc == null || targetAsin == null || targetAsin.isBlank()) {
             return Optional.empty();
         }
+        String target = targetAsin.trim();
+
+        // 优先使用 data-component-type='s-search-result'，这是最准确的搜索结果项
         Elements results = doc.select("[data-component-type='s-search-result'][data-asin]");
+        
+        // 如果没找到，尝试更宽泛的选择器 (兼容旧版或移动版布局)
+        if (results.isEmpty()) {
+            results = doc.select("div.s-result-item[data-asin]:not([data-asin=''])");
+        }
+
         log.debug("关键词排名解析: 检测到 {} 个搜索结果条目", results.size());
+        
+        // 收集当前页所有 ASIN 用于调试 (仅在 DEBUG 级别)
+        if (log.isDebugEnabled()) {
+            String asinsOnPage = results.stream()
+                    .map(e -> e.attr("data-asin"))
+                    .limit(20)
+                    .collect(java.util.stream.Collectors.joining(","));
+            log.debug("当前页前20个ASIN: [{}]", asinsOnPage);
+        }
+
         for (int i = 0; i < results.size(); i++) {
             Element item = results.get(i);
             String asin = item.attr("data-asin");
-            if (asin != null && asin.equalsIgnoreCase(targetAsin)) {
+            if (asin != null && asin.trim().equalsIgnoreCase(target)) {
                 int rank = i + 1;
-                log.info("目标 ASIN={} 在当前搜索结果页内排名={}", targetAsin, rank);
+                log.info("目标 ASIN={} 在当前搜索结果页内排名={}", target, rank);
                 return Optional.of(rank);
             }
         }
-        log.debug("目标 ASIN={} 未出现在当前搜索结果页", targetAsin);
+        log.debug("目标 ASIN={} 未出现在当前搜索结果页", target);
         return Optional.empty();
     }
 }

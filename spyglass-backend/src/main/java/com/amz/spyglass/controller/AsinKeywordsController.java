@@ -1,6 +1,7 @@
 package com.amz.spyglass.controller;
 
 import com.amz.spyglass.dto.AsinKeywordDto;
+import com.amz.spyglass.dto.KeywordRankHistoryDto;
 import com.amz.spyglass.dto.KeywordRankResponse;
 import com.amz.spyglass.service.AsinKeywordsService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -93,6 +94,19 @@ public class AsinKeywordsController {
         // 在实践中，可以验证 keywordId 是否真的属于该 asin
         asinKeywordsService.deleteKeyword(keywordId);
         return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "获取关键词排名历史", description = "获取指定关键词的历史排名数据。",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "查询成功", content = @Content(array = @ArraySchema(schema = @Schema(implementation = KeywordRankHistoryDto.class)))),
+                    @ApiResponse(responseCode = "404", description = "未找到指定的关键词记录")
+            })
+    @GetMapping("/{keywordId}/history")
+    public ResponseEntity<List<KeywordRankHistoryDto>> getKeywordHistory(
+            @Parameter(description = "亚马逊标准识别码", required = true, example = "B08N5WRWNW") @PathVariable String asin,
+            @Parameter(description = "关键词记录的唯一ID", required = true, example = "101") @PathVariable Long keywordId) {
+        List<KeywordRankHistoryDto> history = asinKeywordsService.getKeywordRankHistory(keywordId);
+        return ResponseEntity.ok(history);
     }
 
             @Operation(summary = "手动触发关键词排名抓取", description = "立即对指定关键词执行一次 Selenium 抓取，并返回自然排名/广告排名。",
