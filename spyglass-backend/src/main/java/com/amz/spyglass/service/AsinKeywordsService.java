@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+import com.amz.spyglass.model.AsinModel;
+
 /**
  * V2.1 F-BIZ-001: 管理 ASIN 关键词的服务。
  * <p>
@@ -45,14 +47,13 @@ public class AsinKeywordsService {
      */
     @Transactional
     public AsinKeywordDto addKeyword(String asin, AsinKeywordDto keywordDto) {
-        // 验证 ASIN 是否存在
-        asinRepository.findByAsin(asin)
-                .orElseThrow(() -> new EntityNotFoundException("ASIN not found: " + asin));
+        AsinModel asinModel = asinRepository.findByAsin(asin)
+            .orElseThrow(() -> new EntityNotFoundException("ASIN not found: " + asin));
 
         AsinKeywords newKeyword = new AsinKeywords();
-        newKeyword.setAsin(asin);
+        newKeyword.setAsin(asinModel);
         newKeyword.setKeyword(keywordDto.getKeyword());
-        newKeyword.setIsTracked(keywordDto.getIsTracked());
+        newKeyword.setIsTracked(keywordDto.getIsTracked() != null ? keywordDto.getIsTracked() : Boolean.TRUE);
 
         AsinKeywords savedKeyword = asinKeywordsRepository.save(newKeyword);
         log.info("成功为 ASIN: {} 添加关键词: '{}'", asin, savedKeyword.getKeyword());
@@ -68,10 +69,10 @@ public class AsinKeywordsService {
     @Transactional(readOnly = true)
     public List<AsinKeywordDto> getKeywordsByAsin(String asin) {
         // 验证 ASIN 是否存在，便于在 OpenAPI 中准确返回 404 状态
-        asinRepository.findByAsin(asin)
+        AsinModel asinModel = asinRepository.findByAsin(asin)
             .orElseThrow(() -> new EntityNotFoundException("ASIN not found: " + asin));
 
-        return asinKeywordsRepository.findByAsin(asin).stream()
+        return asinKeywordsRepository.findByAsinId(asinModel.getId()).stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
     }
@@ -91,7 +92,7 @@ public class AsinKeywordsService {
                 .orElseThrow(() -> new EntityNotFoundException("Keyword not found with id: " + keywordId));
 
         keyword.setKeyword(keywordDto.getKeyword());
-        keyword.setIsTracked(keywordDto.getIsTracked());
+        keyword.setIsTracked(keywordDto.getIsTracked() != null ? keywordDto.getIsTracked() : Boolean.TRUE);
 
         AsinKeywords updatedKeyword = asinKeywordsRepository.save(keyword);
         log.info("成功更新关键词 ID: {}", keywordId);
@@ -117,7 +118,7 @@ public class AsinKeywordsService {
     private AsinKeywordDto convertToDto(AsinKeywords keyword) {
         AsinKeywordDto dto = new AsinKeywordDto();
         dto.setId(keyword.getId());
-        dto.setAsin(keyword.getAsin());
+        dto.setAsin(keyword.getAsin().getAsin());
         dto.setKeyword(keyword.getKeyword());
         dto.setIsTracked(keyword.getIsTracked());
         return dto;

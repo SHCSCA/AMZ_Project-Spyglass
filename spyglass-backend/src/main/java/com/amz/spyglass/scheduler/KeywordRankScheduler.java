@@ -49,9 +49,10 @@ public class KeywordRankScheduler {
         LocalDate today = LocalDate.now();
 
         for (AsinKeywords keyword : keywordsToTrack) {
+            String asinCode = keyword.getAsin().getAsin();
             try {
-                log.debug("Scraping rank for ASIN '{}' with keyword '{}'", keyword.getAsin(), keyword.getKeyword());
-                SeleniumScraper.KeywordRankResult rankResult = seleniumScraper.fetchKeywordRank(keyword.getAsin(), keyword.getKeyword());
+                log.debug("Scraping rank for ASIN '{}' with keyword '{}'", asinCode, keyword.getKeyword());
+                SeleniumScraper.KeywordRankResult rankResult = seleniumScraper.fetchKeywordRank(asinCode, keyword.getKeyword());
 
                 KeywordRankHistory history = new KeywordRankHistory(
                         keyword,
@@ -63,10 +64,10 @@ public class KeywordRankScheduler {
 
                 keywordRankHistoryRepository.save(history);
                 log.info("Successfully scraped and saved rank for ASIN '{}', keyword '{}'. Natural Rank: {}, Sponsored Rank: {}, Page: {}",
-                        keyword.getAsin(), keyword.getKeyword(), rankResult.getNaturalRank(), rankResult.getSponsoredRank(), rankResult.getPage());
+                        asinCode, keyword.getKeyword(), rankResult.getNaturalRank(), rankResult.getSponsoredRank(), rankResult.getPage());
 
             } catch (Exception e) {
-                log.error("Failed to scrape keyword rank for ASIN '{}', keyword '{}'", keyword.getAsin(), keyword.getKeyword(), e);
+                log.error("Failed to scrape keyword rank for ASIN '{}', keyword '{}'", asinCode, keyword.getKeyword(), e);
                 // 创建一个失败记录
                 KeywordRankHistory failedHistory = new KeywordRankHistory(keyword, today, -1, -1, -1);
                 keywordRankHistoryRepository.save(failedHistory);

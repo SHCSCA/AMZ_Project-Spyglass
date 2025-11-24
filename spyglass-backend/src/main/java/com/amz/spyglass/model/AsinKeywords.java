@@ -17,12 +17,13 @@ public class AsinKeywords extends BaseEntityModel {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 20)
-    private String asin;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "asin_id", nullable = false, foreignKey = @ForeignKey(name = "fk_asin_keywords_asin"))
+    private AsinModel asin;
 
     @Column(nullable = false, length = 255)
     private String keyword;
 
-    @Column(nullable = false)
-    private Boolean isTracked = true;
+    @Column(name = "is_tracked", nullable = false)
+    private Boolean isTracked = Boolean.TRUE;
 }

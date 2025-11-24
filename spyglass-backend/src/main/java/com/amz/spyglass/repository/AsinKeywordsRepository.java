@@ -24,7 +24,7 @@ public interface AsinKeywordsRepository extends JpaRepository<AsinKeywords, Long
      * @param asin 亚马逊标准识别码
      * @return 该 ASIN 的关键词列表
      */
-    List<AsinKeywords> findByAsin(String asin);
+    List<AsinKeywords> findByAsinId(Long asinId);
 
     /**
      * 查找所有需要被追踪的关键词。

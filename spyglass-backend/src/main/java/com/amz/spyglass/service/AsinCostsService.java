@@ -2,6 +2,7 @@ package com.amz.spyglass.service;
 
 import com.amz.spyglass.dto.AsinCostsDto;
 import com.amz.spyglass.model.AsinCosts;
+import com.amz.spyglass.model.AsinModel;
 import com.amz.spyglass.repository.AsinCostsRepository;
 import com.amz.spyglass.repository.AsinRepository;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -47,13 +49,13 @@ public class AsinCostsService {
     @Transactional
     public AsinCostsDto createOrUpdateCosts(String asin, AsinCostsDto costsDto) {
         // 验证 ASIN 是否存在于主表中
-        asinRepository.findByAsin(asin)
-                .orElseThrow(() -> new EntityNotFoundException("ASIN not found: " + asin));
+        AsinModel asinModel = asinRepository.findByAsin(asin)
+            .orElseThrow(() -> new EntityNotFoundException("ASIN not found: " + asin));
 
-        AsinCosts costs = asinCostsRepository.findByAsin(asin)
-                .orElse(new AsinCosts());
+        AsinCosts costs = asinCostsRepository.findByAsinId(asinModel.getId())
+            .orElseGet(AsinCosts::new);
 
-        costs.setAsin(asin);
+        costs.setAsin(asinModel);
         costs.setPurchaseCost(costsDto.getPurchaseCost());
         costs.setShippingCost(costsDto.getShippingCost());
         costs.setFbaFee(costsDto.getFbaFee());
@@ -73,8 +75,9 @@ public class AsinCostsService {
      */
     @Transactional(readOnly = true)
     public Optional<AsinCostsDto> getCostsByAsin(String asin) {
-        return asinCostsRepository.findByAsin(asin)
-                .map(this::convertToDto);
+        return asinRepository.findByAsin(asin)
+            .flatMap(model -> asinCostsRepository.findByAsinId(model.getId()))
+            .map(this::convertToDto);
     }
 
     /**
@@ -84,9 +87,13 @@ public class AsinCostsService {
      */
     @Transactional
     public void deleteCosts(String asin) {
-        AsinCosts costs = asinCostsRepository.findByAsin(asin)
-                .orElseThrow(() -> new EntityNotFoundException("No cost configuration found for ASIN: " + asin));
-        asinCostsRepository.delete(costs);
+        AsinModel asinModel = asinRepository.findByAsin(asin)
+            .orElseThrow(() -> new EntityNotFoundException("ASIN not found: " + asin));
+
+        AsinCosts costs = asinCostsRepository.findByAsinId(asinModel.getId())
+            .orElseThrow(() -> new EntityNotFoundException("No cost configuration found for ASIN: " + asin));
+        Long costId = costs.getId();
+        asinCostsRepository.deleteById(Objects.requireNonNull(costId, "成本配置缺少主键 ID"));
         log.info("成功删除 ASIN: {} 的成本配置。", asin);
     }
 
@@ -103,7 +110,12 @@ public class AsinCostsService {
             return new ProfitCalculationDto(null, null, "无效的售价");
         }
 
-        Optional<AsinCosts> costsOpt = asinCostsRepository.findByAsin(asin);
+        Optional<AsinModel> asinModelOpt = asinRepository.findByAsin(asin);
+        if (asinModelOpt.isEmpty()) {
+            return new ProfitCalculationDto(null, null, "ASIN 不存在");
+        }
+
+        Optional<AsinCosts> costsOpt = asinCostsRepository.findByAsinId(asinModelOpt.get().getId());
         if (costsOpt.isEmpty()) {
             log.warn("ASIN: {} 缺少成本配置，无法计算利润。", asin);
             return new ProfitCalculationDto(null, null, "成本数据未配置");
@@ -119,8 +131,9 @@ public class AsinCostsService {
         totalCost = totalCost.add(Optional.ofNullable(costs.getOtherCost()).orElse(BigDecimal.ZERO));
 
         // 计算关税（如果有关税率）
+        BigDecimal purchaseCost = Optional.ofNullable(costs.getPurchaseCost()).orElse(BigDecimal.ZERO);
         if (costs.getTariffRate() != null && costs.getTariffRate().compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal tariff = costs.getPurchaseCost().multiply(costs.getTariffRate());
+            BigDecimal tariff = purchaseCost.multiply(costs.getTariffRate());
             totalCost = totalCost.add(tariff);
         }
 
@@ -141,7 +154,7 @@ public class AsinCostsService {
 
     private AsinCostsDto convertToDto(AsinCosts costs) {
         AsinCostsDto dto = new AsinCostsDto();
-        dto.setAsin(costs.getAsin());
+        dto.setAsin(costs.getAsin().getAsin());
         dto.setPurchaseCost(costs.getPurchaseCost());
         dto.setShippingCost(costs.getShippingCost());
         dto.setFbaFee(costs.getFbaFee());
