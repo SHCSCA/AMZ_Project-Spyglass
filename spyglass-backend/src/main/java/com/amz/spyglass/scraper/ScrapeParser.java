@@ -1,36 +1,26 @@
 package com.amz.spyglass.scraper;
 
-import lombok.extern.slf4j.Slf4j;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
-import org.springframework.stereotype.Component;
-
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+import org.springframework.stereotype.Component;
+
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * 亚马逊商品页面解析器
- * 
- * 负责从亚马逊商品详情页面HTML中提取关键商品信息，包括：
- * - 商品标题、价格、库存状态
- * - BSR排名信息（主排名、大类、小类及小类排名）
- * - 评价信息（平均评分、总评论数）
- * - 内容MD5哈希（主图、A+内容、最新差评）
- * - 商品特征要点
- * 
- * 支持多种亚马逊页面格式，具备容错和回退机制
- * 注意：解析规则使用启发式选择器，亚马逊页面结构可能变化，生产环境需要监控和调整
- * 
- * @author AI Assistant
- * @version 2.0.0
- * @since 2025-10-31
+ * 负责从亚马逊商品详情页 HTML 中提取关键监控指标，包括价格、库存、BSR、促销等。
+ * 支持多种亚马逊页面格式，并通过启发式选择器增强容错性。
  */
 @Slf4j
 @Component
@@ -40,6 +30,8 @@ public class ScrapeParser {
     // "This seller has only 483 of these available." -> 483
     // "这位卖家最多只能为您提供 483 件商品" -> 483
     private static final Pattern INVENTORY_ALERT_PATTERN = Pattern.compile("(\\d{1,3}(,\\d{3})*|\\d+)(?!\\d*%)");
+    private static final Pattern PRICE_PATTERN = Pattern.compile("(\\d{1,3}(?:,\\d{3})*(?:\\.\\d{2})|\\d+\\.\\d{2}|\\d+)");
+    private static final Pattern AVAILABLE_QTY_PATTERN = Pattern.compile("\\\"(?:availableQuantity|maxOrderQuantity|availableQty|remainingQty)\\\"\\s*:?\\s*(\\d+)");
 
 
     /**
@@ -65,13 +57,25 @@ public class ScrapeParser {
         s.setTitle(title);
 
         // price: 尝试多个常见选择器
-        String priceText = null;
-        Element p1 = doc.selectFirst("#priceblock_ourprice, #priceblock_dealprice, .a-price .a-offscreen");
-        if (p1 != null) priceText = p1.text();
+        String priceText = firstNonEmptyText(doc,
+                "#corePriceDisplay_desktop_feature_div span.a-price span.a-offscreen",
+                "#corePrice_feature_div span.a-price span.a-offscreen",
+                "#corePrice_desktop span.a-price span.a-offscreen",
+                "span[data-a-color=price] span.a-offscreen",
+                "#price_inside_buybox",
+                "#sns-base-price",
+                "#priceblock_ourprice",
+                "#priceblock_dealprice",
+                ".a-price .a-offscreen",
+                "#tp_price_block_total_price_ww");
+
         if (priceText == null) {
-            Element p2 = doc.selectFirst("#tp_price_block_total_price_ww");
-            if (p2 != null) priceText = p2.text();
+            priceText = firstAttributeValue(doc, "meta[property=og:price:amount]", "content");
         }
+        if (priceText == null) {
+            priceText = firstAttributeValue(doc, "span[data-a-size=xl][data-a-color=price]", "data-a-value");
+        }
+
         s.setPrice(parsePriceToBigDecimal(priceText));
 
         // BSR: 查找 "Best Sellers Rank" 信息，支持多种格式
@@ -97,21 +101,17 @@ public class ScrapeParser {
                         String[] parts = rankPart.split(" in ", 2);
                         if (parts.length >= 2) {
                             // 提取排名数字
-                            String rankStr = parts[0].replaceAll("[^0-9,]", "").replaceAll(",", "");
-                            try {
-                                if (!rankStr.isEmpty()) {
-                                    bsr = Integer.parseInt(rankStr);
-                                    // 提取大类（括号前的部分）
-                                    String categoryPart = parts[1];
-                                    int parenIndex = categoryPart.indexOf('(');
-                                    if (parenIndex > 0) {
-                                        bsrCategory = categoryPart.substring(0, parenIndex).trim();
-                                    } else {
-                                        bsrCategory = categoryPart.trim();
-                                    }
+                            OptionalInt rankValue = parseFirstInteger(parts[0]);
+                            if (rankValue.isPresent()) {
+                                bsr = rankValue.getAsInt();
+                                // 提取大类（括号前的部分）
+                                String categoryPart = parts[1];
+                                int parenIndex = categoryPart.indexOf('(');
+                                if (parenIndex > 0) {
+                                    bsrCategory = categoryPart.substring(0, parenIndex).trim();
+                                } else {
+                                    bsrCategory = categoryPart.trim();
                                 }
-                            } catch (NumberFormatException ex) {
-                                // ignore
                             }
                         }
                     }
@@ -123,15 +123,11 @@ public class ScrapeParser {
                         String[] parts = rankPart.split(" in ", 2);
                         if (parts.length >= 2) {
                             // 提取子分类排名数字
-                            String subRankStr = parts[0].replaceAll("[^0-9,]", "").replaceAll(",", "");
-                            try {
-                                if (!subRankStr.isEmpty()) {
-                                    bsrSubcategoryRank = Integer.parseInt(subRankStr);
-                                    // 提取子分类名称
-                                    bsrSubcategory = parts[1].trim();
-                                }
-                            } catch (NumberFormatException ex) {
-                                // ignore
+                            OptionalInt subRank = parseFirstInteger(parts[0]);
+                            if (subRank.isPresent()) {
+                                bsrSubcategoryRank = subRank.getAsInt();
+                                // 提取子分类名称
+                                bsrSubcategory = parts[1].trim();
                             }
                         }
                     }
@@ -148,11 +144,9 @@ public class ScrapeParser {
                 String txtLower = txt.toLowerCase(Locale.ROOT);
                 if (txtLower.contains("best sellers rank") || txtLower.contains("best seller rank") || txtLower.contains("best sellers")) {
                     // 提取主BSR排名（第一个数字）
-                    String digits = txt.replaceAll("[^0-9,]", "").replaceAll(",", "");
-                    try {
-                        if (!digits.isEmpty()) bsr = Integer.parseInt(digits);
-                    } catch (NumberFormatException ex) {
-                        // ignore
+                    OptionalInt digits = parseFirstInteger(txt);
+                    if (digits.isPresent()) {
+                        bsr = digits.getAsInt();
                     }
                     
                     // 解析分类信息
@@ -178,10 +172,10 @@ public class ScrapeParser {
             Element sr = doc.selectFirst("#SalesRank, .rank");
             if (sr != null) {
                 String txt = sr.text();
-                String digits = txt.replaceAll("[^0-9,]", "").replaceAll(",", "");
-                try { 
-                    if (!digits.isEmpty()) bsr = Integer.parseInt(digits); 
-                } catch (NumberFormatException ex) {}
+                OptionalInt digits = parseFirstInteger(txt);
+                if (digits.isPresent()) {
+                    bsr = digits.getAsInt();
+                }
                 
                 // 尝试从此元素也解析分类
                 if (txt.contains(" in ") && bsrCategory == null) {
@@ -198,13 +192,16 @@ public class ScrapeParser {
         s.setBsrSubcategory(bsrSubcategory);
         s.setBsrSubcategoryRank(bsrSubcategoryRank);
         // Debug日志
-        System.out.println("[Parser DEBUG] BSR解析结果: bsr=" + bsr + ", category=" + bsrCategory + ", subcat=" + bsrSubcategory + ", subrank=" + bsrSubcategoryRank);
+        log.debug("[Parser] BSR解析结果: bsr={} category={} subcategory={} subRank={}", bsr, bsrCategory, bsrSubcategory, bsrSubcategoryRank);
 
         // inventory: 更准确地解析库存信息
         Integer inventory = null;
+        boolean inferredInStock = false;
         
         // 优先检查多个可能的库存相关选择器
         String[] inventorySelectors = {
+            "#availabilityInsideBuyBox_feature_div span",
+            "#availabilityInsideBuyBox_feature_div",
             "#availability span", 
             "#availability_feature_div span",
             "#availability", 
@@ -212,7 +209,11 @@ public class ScrapeParser {
             "[id*='availability']",
             ".a-size-medium.a-color-success",
             ".a-size-medium.a-color-price",
-            "#merchant-info"
+            "#merchant-info",
+            "#availability-brief",
+            "#deliveryBlockMessage",
+            "#tabular-buybox .a-color-price",
+            "#tabular-buybox .a-color-success"
         };
         
         for (String selector : inventorySelectors) {
@@ -223,27 +224,20 @@ public class ScrapeParser {
                 // 检查常见的库存表达
                 if (invText.contains("only") && invText.contains("left")) {
                     // 例如："Only 12 left in stock"
-                    String digits = invText.replaceAll("[^0-9]", "");
-                    try { 
-                        if (!digits.isEmpty()) {
-                            inventory = Integer.parseInt(digits);
-                            break;
-                        }
-                    } catch (NumberFormatException ex) {}
+                    OptionalInt parsed = parseFirstInteger(invText);
+                    if (parsed.isPresent()) {
+                        inventory = parsed.getAsInt();
+                        break;
+                    }
                 } else if (invText.matches(".*\\d+\\s*(left|remaining|available).*")) {
                     // 匹配包含数字和"left/remaining/available"的文本
-                    String digits = invText.replaceAll("[^0-9]", "");
-                    try { 
-                        if (!digits.isEmpty()) {
-                            inventory = Integer.parseInt(digits);
-                            break;
-                        }
-                    } catch (NumberFormatException ex) {}
-                } else if (invText.contains("in stock") && !invText.contains("out of stock")) {
-                    // 有库存但没有具体数字，设为一个标识值（比如999表示有库存但不知道具体数量）
-                    if (inventory == null) {
-                        inventory = 999; // 表示有库存但数量未知
+                    OptionalInt parsed = parseFirstInteger(invText);
+                    if (parsed.isPresent()) {
+                        inventory = parsed.getAsInt();
+                        break;
                     }
+                } else if (invText.contains("in stock") && !invText.contains("out of stock")) {
+                    inferredInStock = true;
                 } else if (invText.contains("out of stock") || invText.contains("unavailable") || 
                           invText.contains("temporarily out of stock")) {
                     inventory = 0;
@@ -253,19 +247,32 @@ public class ScrapeParser {
             if (inventory != null) break;
         }
         
+        if (inventory == null) {
+            inventory = extractInventoryFromQuantityInputs(doc);
+        }
+
+        if (inventory == null) {
+            inventory = extractInventoryFromEmbeddedScripts(doc);
+        }
+
         // 如果还没找到，尝试从购买选项中推断
         if (inventory == null) {
             Element buyBox = doc.selectFirst("#buybox, #desktop_buybox");
             if (buyBox != null) {
-                if (buyBox.text().toLowerCase().contains("add to cart")) {
-                    inventory = 999; // 有购买按钮，推断有库存
+                String buyBoxText = buyBox.text().toLowerCase(Locale.ROOT);
+                if (buyBoxText.contains("add to cart")) {
+                    inferredInStock = true;
                 } else if (buyBox.text().toLowerCase().contains("currently unavailable")) {
                     inventory = 0;
                 }
             }
         }
-        
-    s.setInventory(inventory);
+
+        if (inventory == null && inferredInStock) {
+            log.debug("[Parser] 检测到有货提示但未解析到具体库存，等待 999 加购策略补全");
+        }
+
+        s.setInventory(inventory);
 
         // image md5: 获取主图 URL，然后对 URL 字符串做 MD5（注意：这不是图片内容的 MD5，仅作为占位）
         String imgUrl = null;
@@ -289,7 +296,8 @@ public class ScrapeParser {
             }
             String bulletsText = sb.length() == 0 ? null : sb.toString();
             s.setBulletPoints(bulletsText);
-        } catch (Exception ignored) {
+        } catch (RuntimeException e) {
+            log.warn("解析要点列表失败", e);
             s.setBulletPoints(null);
         }
 
@@ -306,8 +314,8 @@ public class ScrapeParser {
             if (revEl != null) reviewsText = revEl.text();
             if (reviewsText != null) {
                 // 从 "15 global ratings" 或 "15 ratings" 中提取数字
-                String digits = reviewsText.replaceAll("[^0-9]", "");
-                if (!digits.isEmpty()) s.setTotalReviews(Integer.parseInt(digits));
+                OptionalInt totalReviews = parseFirstInteger(reviewsText);
+                totalReviews.ifPresent(value -> s.setTotalReviews(value));
             }
 
             // 平均评分: 查找 data-hook="rating-out-of-text" 或 .a-icon-alt
@@ -322,8 +330,10 @@ public class ScrapeParser {
                 }
             }
             // Debug日志
-            System.out.println("[Parser DEBUG] 评论/评分解析结果: total_reviews=" + s.getTotalReviews() + ", avg_rating=" + s.getAvgRating());
-        } catch (Exception ignored) {}
+            log.debug("[Parser] 评论/评分解析结果: totalReviews={} avgRating={}", s.getTotalReviews(), s.getAvgRating());
+        } catch (RuntimeException e) {
+            log.warn("解析评论与评分信息失败", e);
+        }
 
         // 尝试抓取最近的差评（1-3星），选择评论列表中第一个满足条件的项
         try {
@@ -333,9 +343,9 @@ public class ScrapeParser {
                 org.jsoup.nodes.Element r = re.selectFirst(".a-icon-alt, .review-rating");
                 if (r != null) ratingText = r.text();
                 if (ratingText != null) {
-                    String digit = ratingText.replaceAll("[^0-9]", "");
-                    if (!digit.isEmpty()) {
-                        int rating = Integer.parseInt(digit.substring(0, Math.min(digit.length(), 1)));
+                    OptionalInt ratingDigits = parseFirstInteger(ratingText);
+                    if (ratingDigits.isPresent()) {
+                        int rating = ratingDigits.getAsInt();
                         if (rating >=1 && rating <=3) {
                             // 找到差评，计算其 MD5（基于评论内容+时间）
                             org.jsoup.nodes.Element content = re.selectFirst(".review-text, .a-size-base.review-text");
@@ -351,15 +361,17 @@ public class ScrapeParser {
                     }
                 }
             }
-        } catch (Exception ignored) {}
+        } catch (RuntimeException e) {
+            log.warn("解析差评信息失败", e);
+        }
 
         // V2.1 F-DATA-002: 解析促销信息
-        String contextId = Optional.ofNullable(doc.baseUri()).orElse(title);
-        log.debug("开始解析促销信息, source={}", contextId);
-        s.setCouponValue(parseCoupon(doc).orElse(null));
-        s.setLightningDeal(parseLightningDeal(doc));
-        if (s.getCouponValue() != null || s.isLightningDeal()) {
-            log.info("检测到促销活动 source={} coupon={} lightningDeal={}", contextId, s.getCouponValue(), s.isLightningDeal());
+            String contextId = Optional.ofNullable(doc.baseUri()).orElse(title);
+            log.debug("开始解析促销信息, source={}", contextId);
+            s.setCouponValue(parseCoupon(doc).orElse(null));
+            s.setLightningDeal(parseLightningDeal(doc));
+            if (s.getCouponValue() != null || s.isLightningDeal()) {
+                log.info("检测到促销活动 source={} coupon={} lightningDeal={}", contextId, s.getCouponValue(), s.isLightningDeal());
         }
 
         return s;
@@ -367,14 +379,126 @@ public class ScrapeParser {
 
     private static BigDecimal parsePriceToBigDecimal(String priceText) {
         if (priceText == null) return null;
-        // 去掉货币符号与逗号
-        String cleaned = priceText.replaceAll("[^0-9.\\-]", "");
-        if (cleaned.isEmpty()) return null;
-        try {
-            return new BigDecimal(cleaned);
-        } catch (Exception e) {
+        String normalized = priceText.replace('\u00a0', ' ');
+        Matcher priceMatcher = PRICE_PATTERN.matcher(normalized);
+        if (priceMatcher.find()) {
+            String number = priceMatcher.group(1).replace(",", "");
+            try {
+                return new BigDecimal(number);
+            } catch (NumberFormatException ignored) {
+                // ignore and fall through
+            }
+        }
+        return null;
+    }
+
+    private static Integer extractInventoryFromQuantityInputs(Document doc) {
+        Element quantityInput = doc.selectFirst("input#quantity, input[name=quantity], input#mobileQuantityStepper-input, input[data-max]");
+        if (quantityInput != null) {
+            String candidate = firstNonEmptyAttr(quantityInput, "data-a-max-quantity", "data-max", "max");
+            if (!isBlank(candidate)) {
+                OptionalInt parsed = parseFirstInteger(candidate);
+                if (parsed.isPresent()) {
+                    return parsed.getAsInt();
+                }
+            }
+        }
+
+        Element hiddenStock = doc.selectFirst("input[id*=availableQuantity], input[name=available_qty], input[data-available], span[data-available]");
+        if (hiddenStock != null) {
+            String candidate = firstNonEmptyAttr(hiddenStock, "value", "data-available", "data-default-available");
+            if (!isBlank(candidate)) {
+                OptionalInt parsed = parseFirstInteger(candidate);
+                if (parsed.isPresent()) {
+                    return parsed.getAsInt();
+                }
+            }
+        }
+        return null;
+    }
+
+    private static Integer extractInventoryFromEmbeddedScripts(Document doc) {
+        String html = doc.outerHtml();
+        if (html == null || html.isEmpty()) {
             return null;
         }
+        Matcher matcher = AVAILABLE_QTY_PATTERN.matcher(html);
+        if (matcher.find()) {
+            try {
+                return Integer.parseInt(matcher.group(1));
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private static String firstNonEmptyText(Document doc, String... selectors) {
+        for (String selector : selectors) {
+            Element element = doc.selectFirst(selector);
+            if (element == null) {
+                continue;
+            }
+            String text = element.text();
+            if (!isBlank(text)) {
+                return text.trim();
+            }
+            String valueAttr = element.attr("value");
+            if (!isBlank(valueAttr)) {
+                return valueAttr.trim();
+            }
+        }
+        return null;
+    }
+
+    private static String firstAttributeValue(Document doc, String selector, String attr) {
+        Element element = doc.selectFirst(selector);
+        if (element == null) {
+            return null;
+        }
+        String value = element.attr(attr);
+        return isBlank(value) ? null : value.trim();
+    }
+
+    private static String firstNonEmptyAttr(Element element, String... attrNames) {
+        for (String attr : attrNames) {
+            if (attr == null) {
+                continue;
+            }
+            String value = element.attr(attr);
+            if (!isBlank(value)) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
+    private static OptionalInt parseFirstInteger(String text) {
+        if (text == null || text.isEmpty()) {
+            return OptionalInt.empty();
+        }
+        long value = 0;
+        boolean collecting = false;
+        for (int i = 0; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            if (Character.isDigit(ch)) {
+                collecting = true;
+                value = value * 10 + (ch - '0');
+                if (value > Integer.MAX_VALUE) {
+                    log.warn("解析整数时检测到溢出，原始文本={}", text);
+                    return OptionalInt.empty();
+                }
+            } else if (ch == ',' && collecting) {
+                // thousands separator, skip
+            } else if (collecting) {
+                return OptionalInt.of((int) value);
+            }
+        }
+        return collecting ? OptionalInt.of((int) value) : OptionalInt.empty();
     }
 
     private static String md5Hex(String input) {
@@ -451,19 +575,28 @@ public class ScrapeParser {
             return Optional.empty();
         }
 
+        String lowerCaseText = alertText.toLowerCase(Locale.ROOT);
+
+        // V2.1 F-DATA-001 Hotfix: 检查是否存在限购关键词，如果存在，则不应将限购数量误判为库存
+        if (lowerCaseText.contains("limit") || lowerCaseText.contains("per customer") || lowerCaseText.contains("限购")) {
+            log.warn("检测到卖家可能设置了限购，提示文本: '{}'。此数字不代表总库存，将忽略。", alertText);
+            // 当检测到购买限制时，我们无法从该警报中确定真实库存。
+            // 返回 empty 将允许其他库存检查机制（如果存在）继续进行。
+            return Optional.empty();
+        }
+
         Matcher matcher = INVENTORY_ALERT_PATTERN.matcher(alertText);
         if (matcher.find()) {
-            try {
-                String digits = matcher.group(1).replaceAll(",", "");
-                log.debug("从库存提示 '{}' 中解析出数字: {}", alertText, digits);
-                return Optional.of(Integer.parseInt(digits));
-            } catch (NumberFormatException e) {
-                log.error("解析库存数字失败: '{}'", alertText, e);
+            OptionalInt parsed = parseFirstInteger(matcher.group(1));
+            if (parsed.isPresent()) {
+                int parsedValue = parsed.getAsInt();
+                log.debug("从库存提示 '{}' 中解析出数字: {}", alertText, parsedValue);
+                return Optional.of(parsedValue);
             }
+            log.error("解析库存数字失败: '{}'", alertText);
         } else {
             // PRD F-DATA-001 异常处理: 如果允许购买999，则标记为999+
             // 这里通过检查文本是否包含 "added to cart" 或类似成功信息来判断
-            String lowerCaseText = alertText.toLowerCase();
             if (lowerCaseText.contains("added to cart") || lowerCaseText.contains("已加入购物车")) {
                  log.info("未找到库存限制提示，且加购成功，标记库存为 999+");
                  return Optional.of(999); // 使用 999 代表库存充足
