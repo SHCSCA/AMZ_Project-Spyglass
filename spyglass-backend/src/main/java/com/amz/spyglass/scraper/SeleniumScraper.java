@@ -442,6 +442,12 @@ public class SeleniumScraper implements Scraper {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
 
         try {
+            // 0. 检查是否遇到验证码
+            if (checkForCaptcha(driver)) {
+                log.warn("ASIN: {} - 遇到验证码，无法执行 999 加购法", asin);
+                return Optional.empty();
+            }
+
             // 1. 定位并点击 "Add to Cart" 按钮
             WebElement addToCartButton = wait.until(ExpectedConditions.elementToBeClickable(By.id("add-to-cart-button")));
             addToCartButton.click();
@@ -453,6 +459,11 @@ public class SeleniumScraper implements Scraper {
             String cartUrl = "https://www.amazon.com/gp/cart/view.html";
             driver.get(cartUrl);
             log.debug("ASIN: {} - 已跳转到购物车页面: {}", asin, cartUrl);
+
+            if (checkForCaptcha(driver)) {
+                log.warn("ASIN: {} - 购物车页面遇到验证码", asin);
+                return Optional.empty();
+            }
 
             // 3. 修改购买数量为 999
             WebElement quantityInput = wait.until(ExpectedConditions.visibilityOfElementLocated(By.cssSelector("input[name^='quantity']")));
@@ -467,9 +478,25 @@ public class SeleniumScraper implements Scraper {
 
             // 4. 抓取提示信息并解析
             // 等待提示信息出现。这通常是一个包含错误或提示的 div。
-            WebElement alertElement = wait.until(ExpectedConditions.visibilityOfElementLocated(By.cssSelector(".sc-list-item-notification .a-alert-content")));
-            String alertText = alertElement.getText();
-            log.info("ASIN: {} - 捕获到库存提示信息: '{}'", asin, alertText);
+            // 尝试多个选择器
+            WebElement alertElement = null;
+            try {
+                alertElement = wait.until(ExpectedConditions.visibilityOfElementLocated(
+                        By.cssSelector(".sc-list-item-notification .a-alert-content, .sc-quantity-update-message .a-alert-content, .a-alert-content")));
+            } catch (TimeoutException e) {
+                log.warn("ASIN: {} - 未找到标准的库存提示元素，尝试查找页面上的所有警告文本", asin);
+            }
+
+            String alertText;
+            if (alertElement != null) {
+                alertText = alertElement.getText();
+            } else {
+                // Fallback: 获取整个购物车容器的文本，看是否包含相关信息
+                WebElement cartContainer = driver.findElement(By.id("sc-active-cart"));
+                alertText = cartContainer.getText();
+            }
+            
+            log.info("ASIN: {} - 捕获到潜在库存提示信息: '{}'", asin, alertText.replace('\n', ' '));
 
             return scrapeParser.parseInventoryFromAlert(alertText);
 
@@ -480,6 +507,21 @@ public class SeleniumScraper implements Scraper {
         } catch (Exception e) {
             log.error("ASIN: {} - 执行 [999加购法] 时发生未预料的异常", asin, e);
             return Optional.empty();
+        }
+    }
+
+    private boolean checkForCaptcha(WebDriver driver) {
+        try {
+            String title = driver.getTitle();
+            if (title != null && (title.contains("Robot Check") || title.contains("CAPTCHA"))) {
+                return true;
+            }
+            if (!driver.findElements(By.cssSelector("form[action*='validateCaptcha']")).isEmpty()) {
+                return true;
+            }
+            return false;
+        } catch (Exception e) {
+            return false;
         }
     }
 
@@ -519,6 +561,11 @@ public class SeleniumScraper implements Scraper {
                 log.info("抓取关键词='{}' 第 {} 页，URL={}", keyword, page, searchUrl);
                 driver.get(searchUrl);
 
+                if (checkForCaptcha(driver)) {
+                    log.warn("关键词='{}' 第 {} 页遇到验证码，终止抓取", keyword, page);
+                    break;
+                }
+
                 WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(25));
                 try {
                     // 兼容多种选择器，防止因页面结构差异导致误判超时
@@ -541,6 +588,11 @@ public class SeleniumScraper implements Scraper {
                 }
                 int pageCount = allResults.size();
                 log.debug("关键词='{}' 第 {} 页结果数量: {}, 过滤前: {}", keyword, page, pageCount, pageCountBeforeFilter);
+
+                if (pageCount == 0) {
+                    log.warn("关键词='{}' 第 {} 页未找到任何结果。页面标题: '{}'", keyword, page, driver.getTitle());
+                    // 可能是页面结构完全改变，或者被识别为机器人但没有显示标准验证码
+                }
 
                 Optional<Integer> rankOnPageOpt = scrapeParser.parseKeywordRank(doc, targetAsin);
                 if (rankOnPageOpt.isPresent()) {
