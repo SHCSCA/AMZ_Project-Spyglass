@@ -1,20 +1,24 @@
 package com.amz.spyglass.service;
 
 import com.amz.spyglass.dto.AsinKeywordDto;
+import com.amz.spyglass.dto.KeywordRankResponse;
 import com.amz.spyglass.model.AsinKeywords;
+import com.amz.spyglass.model.AsinModel;
+import com.amz.spyglass.model.KeywordRankHistory;
 import com.amz.spyglass.repository.AsinKeywordsRepository;
 import com.amz.spyglass.repository.AsinRepository;
+import com.amz.spyglass.repository.KeywordRankHistoryRepository;
+import com.amz.spyglass.scraper.SeleniumScraper;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
-
-import com.amz.spyglass.model.AsinModel;
 
 /**
  * V2.1 F-BIZ-001: 管理 ASIN 关键词的服务。
@@ -31,11 +35,18 @@ public class AsinKeywordsService {
 
     private final AsinKeywordsRepository asinKeywordsRepository;
     private final AsinRepository asinRepository;
+    private final KeywordRankHistoryRepository keywordRankHistoryRepository;
+    private final SeleniumScraper seleniumScraper;
 
     @Autowired
-    public AsinKeywordsService(AsinKeywordsRepository asinKeywordsRepository, AsinRepository asinRepository) {
+    public AsinKeywordsService(AsinKeywordsRepository asinKeywordsRepository,
+                               AsinRepository asinRepository,
+                               KeywordRankHistoryRepository keywordRankHistoryRepository,
+                               SeleniumScraper seleniumScraper) {
         this.asinKeywordsRepository = asinKeywordsRepository;
         this.asinRepository = asinRepository;
+        this.keywordRankHistoryRepository = keywordRankHistoryRepository;
+        this.seleniumScraper = seleniumScraper;
     }
 
     /**
@@ -72,7 +83,7 @@ public class AsinKeywordsService {
         AsinModel asinModel = asinRepository.findByAsin(asin)
             .orElseThrow(() -> new EntityNotFoundException("ASIN not found: " + asin));
 
-        return asinKeywordsRepository.findByAsinId(asinModel.getId()).stream()
+        return asinKeywordsRepository.findByAsin_Id(asinModel.getId()).stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
     }
@@ -113,6 +124,44 @@ public class AsinKeywordsService {
         }
         asinKeywordsRepository.deleteById(keywordId);
         log.info("成功删除关键词 ID: {}", keywordId);
+    }
+
+    /**
+     * 手动触发关键词排名抓取，立即返回本次抓取结果并入库。
+     */
+    @Transactional
+    public KeywordRankResponse triggerImmediateTracking(String asin, Long keywordId) {
+        Objects.requireNonNull(keywordId, "keywordId must not be null");
+
+        AsinModel asinModel = asinRepository.findByAsin(asin)
+                .orElseThrow(() -> new EntityNotFoundException("ASIN not found: " + asin));
+
+        AsinKeywords keyword = asinKeywordsRepository.findByIdAndAsin_Id(keywordId, asinModel.getId())
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Keyword " + keywordId + " not found for ASIN " + asin));
+
+        String asinCode = asinModel.getAsin();
+        LocalDate today = LocalDate.now();
+
+        try {
+            SeleniumScraper.KeywordRankResult rankResult = seleniumScraper.fetchKeywordRank(asinCode, keyword.getKeyword());
+
+            KeywordRankHistory history = new KeywordRankHistory(
+                    keyword,
+                    today,
+                    rankResult.getNaturalRank(),
+                    rankResult.getSponsoredRank(),
+                    rankResult.getPage()
+            );
+            keywordRankHistoryRepository.save(history);
+
+            return KeywordRankResponse.success(keyword.getId(), asinCode, keyword.getKeyword(), history);
+        } catch (Exception e) {
+            log.error("手动触发关键词排名抓取失败 asin={} keywordId={}", asinCode, keywordId, e);
+            KeywordRankHistory failedHistory = new KeywordRankHistory(keyword, today, -1, -1, -1);
+            keywordRankHistoryRepository.save(failedHistory);
+            throw new IllegalStateException("关键词排名抓取失败: " + e.getMessage(), e);
+        }
     }
 
     private AsinKeywordDto convertToDto(AsinKeywords keyword) {

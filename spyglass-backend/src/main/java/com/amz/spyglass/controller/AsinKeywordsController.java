@@ -1,6 +1,7 @@
 package com.amz.spyglass.controller;
 
 import com.amz.spyglass.dto.AsinKeywordDto;
+import com.amz.spyglass.dto.KeywordRankResponse;
 import com.amz.spyglass.service.AsinKeywordsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -92,5 +93,19 @@ public class AsinKeywordsController {
         // 在实践中，可以验证 keywordId 是否真的属于该 asin
         asinKeywordsService.deleteKeyword(keywordId);
         return ResponseEntity.noContent().build();
+    }
+
+            @Operation(summary = "手动触发关键词排名抓取", description = "立即对指定关键词执行一次 Selenium 抓取，并返回自然排名/广告排名。",
+                responses = {
+                    @ApiResponse(responseCode = "200", description = "抓取成功", content = @Content(schema = @Schema(implementation = KeywordRankResponse.class))),
+                    @ApiResponse(responseCode = "404", description = "ASIN 或关键词不存在"),
+                    @ApiResponse(responseCode = "500", description = "抓取失败，请稍后重试")
+                })
+    @PostMapping("/{keywordId}/track-now")
+    public ResponseEntity<KeywordRankResponse> trackKeywordNow(
+            @Parameter(description = "亚马逊标准识别码", required = true, example = "B08N5WRWNW") @PathVariable String asin,
+            @Parameter(description = "关键词记录的唯一ID", required = true, example = "101") @PathVariable Long keywordId) {
+        KeywordRankResponse response = asinKeywordsService.triggerImmediateTracking(asin, keywordId);
+        return ResponseEntity.ok(response);
     }
 }

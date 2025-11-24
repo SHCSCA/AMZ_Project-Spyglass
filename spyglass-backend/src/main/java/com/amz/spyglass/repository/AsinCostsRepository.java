@@ -24,7 +24,7 @@ public interface AsinCostsRepository extends JpaRepository<AsinCosts, Long> {
      * @param asin 亚马逊标准识别码
      * @return 包含成本配置的 Optional，如果不存在则为空
      */
-    Optional<AsinCosts> findByAsinId(Long asinId);
+    Optional<AsinCosts> findByAsin_Id(Long asinId);
 
-    boolean existsByAsinId(Long asinId);
+    boolean existsByAsin_Id(Long asinId);
 }

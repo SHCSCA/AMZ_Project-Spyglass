@@ -52,7 +52,7 @@ public class AsinCostsService {
         AsinModel asinModel = asinRepository.findByAsin(asin)
             .orElseThrow(() -> new EntityNotFoundException("ASIN not found: " + asin));
 
-        AsinCosts costs = asinCostsRepository.findByAsinId(asinModel.getId())
+        AsinCosts costs = asinCostsRepository.findByAsin_Id(asinModel.getId())
             .orElseGet(AsinCosts::new);
 
         costs.setAsin(asinModel);
@@ -76,7 +76,7 @@ public class AsinCostsService {
     @Transactional(readOnly = true)
     public Optional<AsinCostsDto> getCostsByAsin(String asin) {
         return asinRepository.findByAsin(asin)
-            .flatMap(model -> asinCostsRepository.findByAsinId(model.getId()))
+            .flatMap(model -> asinCostsRepository.findByAsin_Id(model.getId()))
             .map(this::convertToDto);
     }
 
@@ -90,7 +90,7 @@ public class AsinCostsService {
         AsinModel asinModel = asinRepository.findByAsin(asin)
             .orElseThrow(() -> new EntityNotFoundException("ASIN not found: " + asin));
 
-        AsinCosts costs = asinCostsRepository.findByAsinId(asinModel.getId())
+        AsinCosts costs = asinCostsRepository.findByAsin_Id(asinModel.getId())
             .orElseThrow(() -> new EntityNotFoundException("No cost configuration found for ASIN: " + asin));
         Long costId = costs.getId();
         asinCostsRepository.deleteById(Objects.requireNonNull(costId, "成本配置缺少主键 ID"));
@@ -115,7 +115,7 @@ public class AsinCostsService {
             return new ProfitCalculationDto(null, null, "ASIN 不存在");
         }
 
-        Optional<AsinCosts> costsOpt = asinCostsRepository.findByAsinId(asinModelOpt.get().getId());
+        Optional<AsinCosts> costsOpt = asinCostsRepository.findByAsin_Id(asinModelOpt.get().getId());
         if (costsOpt.isEmpty()) {
             log.warn("ASIN: {} 缺少成本配置，无法计算利润。", asin);
             return new ProfitCalculationDto(null, null, "成本数据未配置");

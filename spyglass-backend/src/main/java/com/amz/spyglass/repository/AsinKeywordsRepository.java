@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * ASIN 关键词数据的 Spring Data JPA Repository。
@@ -24,7 +25,9 @@ public interface AsinKeywordsRepository extends JpaRepository<AsinKeywords, Long
      * @param asin 亚马逊标准识别码
      * @return 该 ASIN 的关键词列表
      */
-    List<AsinKeywords> findByAsinId(Long asinId);
+    List<AsinKeywords> findByAsin_Id(Long asinId);
+
+    Optional<AsinKeywords> findByIdAndAsin_Id(Long keywordId, Long asinId);
 
     /**
      * 查找所有需要被追踪的关键词。

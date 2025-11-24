@@ -130,6 +130,8 @@ public class AsinHistoryController {
         r.setTotalReviews(h.getTotalReviews());
         r.setAvgRating(h.getAvgRating());
         r.setSnapshotAt(h.getSnapshotAt());
+        r.setCouponValue(h.getCouponValue());
+        r.setIsLightningDeal(h.getIsLightningDeal());
         return r;
     }
 }
