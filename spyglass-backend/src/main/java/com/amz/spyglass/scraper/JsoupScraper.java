@@ -1,6 +1,10 @@
 package com.amz.spyglass.scraper;
 
-import com.amz.spyglass.config.ScraperProperties;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.Optional;
+import java.util.concurrent.ThreadLocalRandom;
+
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -8,10 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
-import java.time.Duration;
-import java.util.Optional;
-import java.util.concurrent.ThreadLocalRandom;
+import com.amz.spyglass.config.ScraperProperties;
 
 /**
  * Jsoup 实现的 Scraper（中文注释）
@@ -110,6 +111,29 @@ public class JsoupScraper implements Scraper {
         logger.info("[Jsoup] 抓取完成 summary: title='{}' price={} bsr={} reviews={} rating={} cost={}ms",
                 truncate(snapshot.getTitle(), 60), snapshot.getPrice(), snapshot.getBsr(), snapshot.getTotalReviews(), snapshot.getAvgRating(), (System.currentTimeMillis() - startMs));
         return snapshot;
+    }
+
+    public Optional<Document> getDocument(String url) {
+        try {
+            Connection conn = Jsoup.connect(url)
+                    .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .timeout((int) Duration.ofSeconds(30).toMillis())
+                    .followRedirects(true);
+
+            ProxyInstance proxy = attachProxy(conn).orElse(null);
+            try {
+                Document doc = conn.get();
+                proxyManager.recordSuccess(proxy);
+                return Optional.of(doc);
+            } catch (Exception e) {
+                proxyManager.recordFailure(proxy);
+                logger.error("Error fetching document from {}: {}", url, e.getMessage());
+                return Optional.empty();
+            }
+        } catch (Exception e) {
+            logger.error("Error initializing connection to {}: {}", url, e.getMessage());
+            return Optional.empty();
+        }
     }
 
     private Optional<ProxyInstance> attachProxy(Connection conn) {
