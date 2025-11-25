@@ -172,6 +172,22 @@ public class AsinKeywordsService {
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Keyword " + keywordId + " not found for ASIN " + asin));
         
+        return performRankingCheck(keyword);
+    }
+
+    /**
+     * 调度器调用的关键词排名检查方法（仅需 ID）。
+     */
+    @Transactional
+    public void checkKeywordRank(Long keywordId) {
+        Objects.requireNonNull(keywordId, "keywordId must not be null");
+        AsinKeywords keyword = asinKeywordsRepository.findById(keywordId)
+                .orElseThrow(() -> new EntityNotFoundException("Keyword not found with id: " + keywordId));
+        
+        performRankingCheck(keyword);
+    }
+
+    private KeywordRankResponse performRankingCheck(AsinKeywords keyword) {
         // V2.1 F-BIZ-001 Hotfix: 增加对关联 ASIN 的空值检查
         if (keyword.getAsin() == null || keyword.getAsin().getAsin() == null) {
             log.error("关键词 ID: {} 关联的 ASIN 对象或 ASIN 字符串为空，无法执行排名抓取。", keyword.getId());
@@ -195,7 +211,7 @@ public class AsinKeywordsService {
 
             return KeywordRankResponse.success(keyword.getId(), asinCode, keyword.getKeyword(), history);
         } catch (Exception e) {
-            log.error("手动触发关键词排名抓取失败 asin={} keywordId={}", asinCode, keywordId, e);
+            log.error("关键词排名抓取失败 asin={} keywordId={}", asinCode, keyword.getId(), e);
             KeywordRankHistory failedHistory = new KeywordRankHistory(keyword, today, -1, -1, -1);
             keywordRankHistoryRepository.save(failedHistory);
             throw new IllegalStateException("关键词排名抓取失败: " + e.getMessage(), e);

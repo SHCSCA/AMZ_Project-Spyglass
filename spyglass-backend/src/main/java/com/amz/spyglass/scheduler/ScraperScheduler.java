@@ -1,15 +1,17 @@
 package com.amz.spyglass.scheduler;
 
-import com.amz.spyglass.model.AsinModel;
-import com.amz.spyglass.repository.AsinRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.context.annotation.Profile;
 
-import java.util.List;
+import com.amz.spyglass.model.AsinModel;
+import com.amz.spyglass.repository.AsinRepository;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 轻量调度器：仅负责批量读取 ASIN 并提交到独立的执行器（ScraperTaskExecutor）。
@@ -21,6 +23,7 @@ import java.util.List;
 public class ScraperScheduler {
 
     private final AsinRepository asinRepository;
+    private final com.amz.spyglass.repository.AsinKeywordsRepository asinKeywordsRepository;
     private final ScraperTaskExecutor scraperTaskExecutor;
 
     @Value("${scraper.fixedDelayMs:14400000}")
@@ -53,6 +56,40 @@ public class ScraperScheduler {
         long duration = System.currentTimeMillis() - start;
         log.info("========================================");
         log.info("[Scheduler] 批量调度完成");
+        log.info("[Scheduler] 总数: {}, 已提交: {}, 提交失败: {}, 耗时: {} ms",
+                totalCount, submittedCount, failedCount, duration);
+        log.info("========================================");
+    }
+
+    // 关键词排名监控定时任务：每天 UTC 00:30 执行（错开 ASIN 抓取高峰）
+    @Scheduled(cron = "0 30 0 * * ?", zone = "UTC")
+    public void runAllKeywords() {
+        long start = System.currentTimeMillis();
+        log.info("========================================");
+        log.info("[Scheduler] 开始批量调度关键词排名监控任务...");
+        
+        List<com.amz.spyglass.model.AsinKeywords> trackedKeywords = asinKeywordsRepository.findByIsTrackedTrue();
+        int totalCount = trackedKeywords.size();
+        int submittedCount = 0;
+        int failedCount = 0;
+        
+        log.info("[Scheduler] 准备调度关键词总数: {}", totalCount);
+        
+        for (com.amz.spyglass.model.AsinKeywords kw : trackedKeywords) {
+            try {
+                log.info("[Scheduler] 提交关键词排名抓取任务 -> ID={}, Keyword={}, ASIN={}",
+                        kw.getId(), kw.getKeyword(), kw.getAsin().getAsin());
+                scraperTaskExecutor.executeKeywordRankCheckAsync(kw.getId());
+                submittedCount++;
+            } catch (Exception ex) {
+                failedCount++;
+                log.error("[Scheduler] 提交关键词任务失败 ID={} : {}", kw.getId(), ex.getMessage(), ex);
+            }
+        }
+        
+        long duration = System.currentTimeMillis() - start;
+        log.info("========================================");
+        log.info("[Scheduler] 关键词排名调度完成");
         log.info("[Scheduler] 总数: {}, 已提交: {}, 提交失败: {}, 耗时: {} ms",
                 totalCount, submittedCount, failedCount, duration);
         log.info("========================================");
@@ -98,6 +135,13 @@ public class ScraperScheduler {
     }
 
     public boolean runForSingleAsin(Long asinId) {
-        return runForSpecificAsins(java.util.Collections.singletonList(asinId)) > 0;
+        try {
+            runForAsinAsync(asinId);
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to run for single ASIN: " + asinId, e);
+            return false;
+        }
     }
 }
+

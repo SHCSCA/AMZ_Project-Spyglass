@@ -1,20 +1,22 @@
 package com.amz.spyglass.scheduler;
 
-import com.amz.spyglass.model.AsinModel;
-import com.amz.spyglass.model.ScrapeTaskModel;
-import com.amz.spyglass.repository.AsinRepository;
-import com.amz.spyglass.repository.ScrapeTaskRepository;
-import com.amz.spyglass.service.ScraperService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.time.Instant;
+import java.util.Optional;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
-import java.util.Optional;
+import com.amz.spyglass.model.AsinModel;
+import com.amz.spyglass.model.ScrapeTaskModel;
+import com.amz.spyglass.repository.AsinRepository;
+import com.amz.spyglass.repository.ScrapeTaskRepository;
+import com.amz.spyglass.service.ScraperService;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 单个 ASIN 抓取执行器，独立 Bean 以确保 @Async/@Retryable 生效（跨 Bean 调用会走代理）。
@@ -29,6 +31,7 @@ public class ScraperTaskExecutor {
     private final ScrapeTaskRepository scrapeTaskRepository;
     private final com.amz.spyglass.repository.AsinHistoryRepository asinHistoryRepository;
     private final com.amz.spyglass.alert.AlertService alertService;
+    private final com.amz.spyglass.service.AsinKeywordsService asinKeywordsService;
 
     @Value("${scraper.fixedDelayMs:14400000}")
     private long configuredDelay;
@@ -131,5 +134,46 @@ public class ScraperTaskExecutor {
     private String truncate(String input, int maxLen) {
         if (input == null) return null;
         return input.length() <= maxLen ? input : input.substring(0, maxLen) + "...";
+    }
+
+    /**
+     * 异步执行关键词排名抓取任务。
+     *
+     * @param keywordId 关键词ID
+     */
+    @Async
+    @Retryable(
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 60000), // 失败后延迟1分钟重试
+            include = {
+                    org.openqa.selenium.TimeoutException.class,
+                    Exception.class
+            }
+    )
+    public void executeKeywordRankCheckAsync(Long keywordId) {
+        log.info("[Task] 开始抓取关键词排名 keywordId={}", keywordId);
+        try {
+            // 由于 triggerImmediateTracking 需要 asin 字符串，我们这里先不传或者重构 service
+            // 但为了复用，我们可以先获取 keyword 实体拿到 ASIN
+            // 为了避免在 Executor 中引入 Repository，最好是在 Service 中提供一个仅需 ID 的方法
+            // 或者直接调用 triggerImmediateTracking，但需要先查 ASIN。
+            // 让我们简单点，直接调用 service 的方法，但 service 需要 ASIN。
+            // 我们可以让 Service 提供一个重载方法，或者在这里查一下。
+            // 由于 AsinKeywordsService 已经注入，我们可以调用它的一个新方法，或者修改 triggerImmediateTracking。
+            // 实际上 triggerImmediateTracking 内部也是先查 Keyword 再查 ASIN。
+            // 让我们修改 AsinKeywordsService 增加一个只传 ID 的方法，或者在这里处理。
+            // 为了不修改 Service 接口签名太多，我们可以在这里调用一个新加的 helper 方法。
+            
+            // 实际上 AsinKeywordsService.triggerImmediateTracking(String asin, Long keywordId)
+            // 我们可以先通过 keywordId 获取 ASIN。但 Executor 没有 AsinKeywordsRepository。
+            // 让我们在 AsinKeywordsService 中添加 checkKeywordRank(Long keywordId) 方法。
+            
+            asinKeywordsService.checkKeywordRank(keywordId);
+            
+            log.info("[Task] 关键词排名抓取完成 keywordId={}", keywordId);
+        } catch (Exception e) {
+            log.error("[Task] 关键词排名抓取失败 keywordId={} msg={}", keywordId, e.getMessage(), e);
+            throw e; // 抛出异常以触发 Retry
+        }
     }
 }
