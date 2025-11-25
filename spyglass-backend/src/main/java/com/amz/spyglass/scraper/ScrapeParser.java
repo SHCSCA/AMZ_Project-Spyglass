@@ -619,10 +619,10 @@ public class ScrapeParser {
         }
         String target = targetAsin.trim();
 
-        // 优先使用 data-component-type='s-search-result'，这是最准确的搜索结果项
+        // 优先使用 data-component-type='s-search-result'
         Elements results = doc.select("[data-component-type='s-search-result'][data-asin]");
         
-        // 如果没找到，尝试更宽泛的选择器 (兼容旧版或移动版布局)
+        // 回退策略
         if (results.isEmpty()) {
             results = doc.select("div.s-result-item[data-asin]:not([data-asin=''])");
         }
@@ -649,5 +649,50 @@ public class ScrapeParser {
         }
         log.debug("目标 ASIN={} 未出现在当前搜索结果页", target);
         return Optional.empty();
+    }
+
+    /**
+     * V2.1 F-BIZ-001: 从预先筛选的搜索结果列表中解析指定 ASIN 的排名。
+     * @param results 搜索结果元素列表
+     * @param targetAsin 目标 ASIN
+     * @return Optional<Integer> 1-based 排名
+     */
+    public Optional<Integer> parseKeywordRank(java.util.List<Element> results, String targetAsin) {
+        if (results == null || results.isEmpty() || targetAsin == null || targetAsin.isBlank()) {
+            return Optional.empty();
+        }
+        String target = targetAsin.trim();
+
+        log.debug("关键词排名解析: 在 {} 个结果中查找 ASIN={}", results.size(), target);
+
+        for (int i = 0; i < results.size(); i++) {
+            Element item = results.get(i);
+            String asin = item.attr("data-asin");
+            if (asin != null && asin.trim().equalsIgnoreCase(target)) {
+                int rank = i + 1;
+                log.info("目标 ASIN={} 在当前结果列表中排名={}", target, rank);
+                return Optional.of(rank);
+            }
+        }
+        log.debug("目标 ASIN={} 未出现在当前结果列表中", target);
+        return Optional.empty();
+    }
+
+    /**
+     * 从文档中选择搜索结果元素，包含回退策略。
+     * @param doc Jsoup Document
+     * @return 搜索结果元素列表
+     */
+    public java.util.List<Element> selectSearchResults(Document doc) {
+        if (doc == null) return new java.util.ArrayList<>();
+        
+        // 优先使用 data-component-type='s-search-result'
+        Elements results = doc.select("[data-component-type='s-search-result'][data-asin]");
+        
+        // 回退策略
+        if (results.isEmpty()) {
+            results = doc.select("div.s-result-item[data-asin]:not([data-asin=''])");
+        }
+        return results;
     }
 }

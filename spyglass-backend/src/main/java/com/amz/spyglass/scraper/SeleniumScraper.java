@@ -579,7 +579,7 @@ public class SeleniumScraper implements Scraper {
                 String pageSource = driver.getPageSource();
                 org.jsoup.nodes.Document doc = org.jsoup.Jsoup.parse(pageSource, driver.getCurrentUrl());
 
-                java.util.List<org.jsoup.nodes.Element> allResults = doc.select("[data-component-type='s-search-result'][data-asin]");
+                java.util.List<org.jsoup.nodes.Element> allResults = scrapeParser.selectSearchResults(doc);
                 int pageCountBeforeFilter = allResults.size();
                 if (scraperProperties.isFilterSponsored()) {
                     allResults = allResults.stream()
@@ -594,7 +594,7 @@ public class SeleniumScraper implements Scraper {
                     // 可能是页面结构完全改变，或者被识别为机器人但没有显示标准验证码
                 }
 
-                Optional<Integer> rankOnPageOpt = scrapeParser.parseKeywordRank(doc, targetAsin);
+                Optional<Integer> rankOnPageOpt = scrapeParser.parseKeywordRank(allResults, targetAsin);
                 if (rankOnPageOpt.isPresent()) {
                     int rankOnPage = rankOnPageOpt.get();
                     int globalRank = cumulativeOffset + rankOnPage;

@@ -83,4 +83,29 @@ class ScrapeParserTest {
         Optional<Integer> rank = parser.parseKeywordRank(doc, "TARGET");
         assertFalse(rank.isPresent());
     }
+
+    @Test
+    void testParseKeywordRank_WithList() {
+        String html = """
+                <html>
+                <body>
+                    <div data-component-type="s-search-result" data-asin="B001"></div>
+                    <div data-component-type="s-search-result" data-asin="SPONSORED"><span>Sponsored</span></div>
+                    <div data-component-type="s-search-result" data-asin="TARGET"></div>
+                </body>
+                </html>
+                """;
+        Document doc = Jsoup.parse(html);
+        // Simulate filtering
+        java.util.List<org.jsoup.nodes.Element> allResults = doc.select("[data-component-type='s-search-result'][data-asin]");
+        java.util.List<org.jsoup.nodes.Element> filteredResults = allResults.stream()
+                .filter(el -> el.select("span:containsOwn(Sponsored)").isEmpty())
+                .collect(java.util.stream.Collectors.toList());
+        
+        assertEquals(2, filteredResults.size()); // B001 and TARGET
+        
+        Optional<Integer> rank = parser.parseKeywordRank(filteredResults, "TARGET");
+        assertTrue(rank.isPresent());
+        assertEquals(2, rank.get()); // Should be 2nd in the filtered list
+    }
 }
