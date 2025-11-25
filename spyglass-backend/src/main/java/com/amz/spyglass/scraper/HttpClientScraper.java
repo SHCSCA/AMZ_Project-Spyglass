@@ -1,6 +1,5 @@
 package com.amz.spyglass.scraper;
 
-import com.amz.spyglass.config.ProxyConfig;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hc.client5.http.auth.AuthScope;
 import org.apache.hc.client5.http.auth.UsernamePasswordCredentials;
@@ -19,6 +18,7 @@ import org.jsoup.nodes.Document;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -62,48 +62,35 @@ public class HttpClientScraper implements Scraper {
      * 使用Apache HttpClient 5 + 主动代理认证抓取HTML
      */
     private String fetchWithProxy(String url) throws Exception {
-        ProxyConfig.ProxyProvider provider = proxyManager.nextProxy();
-        
-        if (provider == null || provider.getUrl() == null) {
-            throw new RuntimeException("未配置代理");
-        }
-        
-        String proxyHost = extractHost(provider.getUrl());
-        int proxyPort = extractPort(provider.getUrl());
-        
-        log.debug("[HttpClient] 使用代理: {}:{} 用户: {}", proxyHost, proxyPort, provider.getUsername());
-        
-        // 创建代理主机
+        ProxyInstance proxyInstance = proxyManager.borrow()
+                .orElseThrow(() -> new IllegalStateException("未配置可用代理"));
+
+        String proxyHost = proxyInstance.getHost();
+        int proxyPort = proxyInstance.getPort();
+
+        log.debug("[HttpClient] 使用代理: {}:{} 用户: {}", proxyHost, proxyPort, proxyInstance.getUsername().orElse("<none>"));
+
         HttpHost proxy = new HttpHost(proxyHost, proxyPort);
-        
-        // 配置主动代理认证(Preemptive Authentication)
         BasicCredentialsProvider credsProvider = new BasicCredentialsProvider();
-        if (provider.getUsername() != null && provider.getPassword() != null) {
-            credsProvider.setCredentials(
-                new AuthScope(proxy),
-                new UsernamePasswordCredentials(
-                    provider.getUsername(), 
-                    provider.getPassword().toCharArray()
-                )
-            );
-        }
-        
-        // 配置请求超时
+        proxyInstance.getUsername().ifPresent(username -> {
+            char[] password = proxyInstance.getPassword().map(String::toCharArray).orElse(new char[0]);
+            credsProvider.setCredentials(new AuthScope(proxy), new UsernamePasswordCredentials(username, password));
+        });
+
         RequestConfig requestConfig = RequestConfig.custom()
-            .setConnectTimeout(Timeout.of(30, TimeUnit.SECONDS))
-            .setResponseTimeout(Timeout.of(30, TimeUnit.SECONDS))
-            .build();
-        
-        // 创建HttpClient,启用代理路由和主动认证
+                .setConnectTimeout(Timeout.of(30, TimeUnit.SECONDS))
+                .setResponseTimeout(Timeout.of(30, TimeUnit.SECONDS))
+                .build();
+
+        boolean success = false;
         try (CloseableHttpClient httpClient = HttpClients.custom()
                 .setDefaultCredentialsProvider(credsProvider)
                 .setRoutePlanner(new DefaultProxyRoutePlanner(proxy))
                 .setDefaultRequestConfig(requestConfig)
                 .build()) {
-            
+
             HttpGet request = new HttpGet(url);
-            
-            // 增强Headers模拟真实浏览器
+
             request.setHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
             request.setHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
             request.setHeader("Accept-Language", "en-US,en;q=0.9");
@@ -115,49 +102,35 @@ public class HttpClientScraper implements Scraper {
             request.setHeader("Sec-Fetch-Site", "none");
             request.setHeader("Sec-Fetch-User", "?1");
             request.setHeader("Cache-Control", "max-age=0");
-            
+            String proxyAuthHeader = proxyInstance.buildProxyHeaderValue();
+            if (proxyAuthHeader != null) {
+                request.setHeader("Proxy-Authorization", proxyAuthHeader);
+            }
+
             try (CloseableHttpResponse response = httpClient.execute(request)) {
                 int statusCode = response.getCode();
-                
+
                 if (statusCode != 200) {
-                    throw new RuntimeException("HTTP " + statusCode + " for " + url + 
-                        " | 代理: " + proxyHost + ":" + proxyPort + 
-                        " | 用户: " + provider.getUsername());
+                    throw new IOException("HTTP " + statusCode + " for " + url +
+                            " | 代理: " + proxyHost + ":" + proxyPort +
+                            " | 用户: " + proxyInstance.getUsername().orElse("<none>"));
                 }
-                
+
                 String html = EntityUtils.toString(response.getEntity());
                 log.debug("[HttpClient] 抓取成功，HTML长度: {}", html.length());
+                success = true;
                 return html;
-                
-            } catch (Exception e) {
-                throw new RuntimeException("代理请求失败: " + e.getMessage() + 
-                    " | 代理: " + proxyHost + ":" + proxyPort + 
-                    " | 用户: " + provider.getUsername(), e);
+            }
+        } catch (IOException | RuntimeException ex) {
+            throw new IOException("代理请求失败: " + ex.getMessage() +
+                    " | 代理: " + proxyHost + ":" + proxyPort +
+                    " | 用户: " + proxyInstance.getUsername().orElse("<none>"), ex);
+        } finally {
+            if (success) {
+                proxyManager.recordSuccess(proxyInstance);
+            } else {
+                proxyManager.recordFailure(proxyInstance);
             }
         }
-    }
-
-    private String extractHost(String url) {
-        if (url == null) return "localhost";
-        
-        String[] parts = url.split(":");
-        if (parts.length == 2) {
-            return parts[0];
-        } else if (parts.length >= 3) {
-            return parts[1].replace("//", "");
-        }
-        return url;
-    }
-    
-    private int extractPort(String url) {
-        if (url == null) return 8080;
-        
-        String[] parts = url.split(":");
-        if (parts.length == 2) {
-            return Integer.parseInt(parts[1]);
-        } else if (parts.length >= 3) {
-            return Integer.parseInt(parts[2]);
-        }
-        return 8080;
     }
 }

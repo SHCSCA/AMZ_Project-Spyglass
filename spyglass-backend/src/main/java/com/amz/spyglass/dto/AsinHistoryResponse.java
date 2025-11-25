@@ -106,4 +106,16 @@ public class AsinHistoryResponse {
      */
     @Schema(description = "快照时间 (UTC ISO-8601)")
     private Instant snapshotAt;
+
+    /**
+     * 优惠券面额，例如 "$10 off" 或 "5%"。
+     */
+    @Schema(description = "优惠券面额，例如 '$10 off' 或 '5%'", nullable = true)
+    private String couponValue;
+
+    /**
+     * 是否正在进行秒杀活动。
+     */
+    @Schema(description = "是否处于秒杀活动", nullable = true)
+    private Boolean isLightningDeal;
 }
