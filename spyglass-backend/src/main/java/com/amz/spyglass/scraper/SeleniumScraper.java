@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
@@ -50,6 +51,9 @@ public class SeleniumScraper implements Scraper {
     private final long acquireTimeoutSeconds;
 
     private static final Pattern PRICE_PATTERN = Pattern.compile("(\\d{1,3}(?:,\\d{3})*(?:\\.\\d{2})|\\d+\\.\\d{2}|\\d+)");
+    private static final Pattern COUPON_VALUE_PATTERN = Pattern.compile("(\\$\\d+(?:\\.\\d+)?|\\d+%)");
+    private static final Pattern LIMIT_NUMBER_PATTERN = Pattern.compile("(\\d{1,3}(?:,\\d{3})*|\\d+)");
+    private static final String AMAZON_HOME = "https://www.amazon.com";
     // 购物车页面中数量输入框的选择器
     private static final By CART_QUANTITY_INPUT_SELECTOR = By.cssSelector("input[name='quantity']");
     // 购物车中商品行的选择器，用于定位特定ASIN
@@ -78,63 +82,20 @@ public class SeleniumScraper implements Scraper {
      * @param asin   目标ASIN
      * @return Optional<Integer> 库存数量。如果遇到商家限购，则返回-1。如果操作失败或未找到元素，则返回empty。
      */
-    public Optional<Integer> fetchInventoryBy999Method(WebDriver driver, String asin) {
-        try {
-            // 1. 导航至购物车页面
-            driver.get("https://www.amazon.com/gp/cart/view.html");
-            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
-
-            // 2. 定位到目标ASIN所在的购物车条目
-            WebElement cartItem = wait.until(ExpectedConditions.visibilityOfElementLocated(
-                By.cssSelector(String.format("div[data-asin='%s']", asin))
-            ));
-            if (cartItem == null) {
-                log.warn("ASIN {} not found in cart.", asin);
-                return Optional.empty();
-            }
-
-            // 3. 找到数量输入框并尝试修改为999
-            WebElement quantityInput = cartItem.findElement(CART_QUANTITY_INPUT_SELECTOR);
-            quantityInput.clear();
-            quantityInput.sendKeys("999");
-            // 模拟回车或点击更新按钮来提交变更
-            quantityInput.submit();
-
-            // 4. 等待页面响应（关键步骤）
-            // 等待一个明确的信号，比如一个加载动画消失，或者简单等待几秒
-            try {
-                Thread.sleep(3000); // 简单等待，生产环境建议换成更可靠的显式等待
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.warn("Inventory fetch sleep interrupted", e);
-            }
-
-            // 5. 检查是否存在“商家限购”的错误提示
-            List<WebElement> limitErrors = cartItem.findElements(PURCHASE_LIMIT_ERROR_SELECTOR);
-            if (!limitErrors.isEmpty() && limitErrors.get(0).isDisplayed()) {
-                String errorMessage = limitErrors.get(0).getText();
-                log.warn("Seller purchase limit detected for ASIN {}. Message: '{}'. Returning -1.", asin, errorMessage);
-                // 返回-1作为特殊标记，表示遇到限购
-                return Optional.of(-1);
-            }
-
-            // 6. 如果没有限购，读取最终的数量值
-            String finalQuantity = cartItem.findElement(CART_QUANTITY_INPUT_SELECTOR).getAttribute("value");
-            log.info("Successfully fetched inventory for ASIN {}: {}", asin, finalQuantity);
-            return Optional.of(Integer.parseInt(finalQuantity));
-
-        } catch (TimeoutException e) {
-            log.error("Timeout waiting for cart item for ASIN {}. It might not be in the cart.", asin, e);
-            return Optional.empty();
-        } catch (Exception e) {
-            log.error("Failed to fetch inventory for ASIN {} using Selenium. Error: {}", asin, e.getMessage(), e);
-            return Optional.empty();
-        }
+    public Optional<InventoryProbeResult> fetchInventoryBy999Method(WebDriver driver, String asin) {
+        return scrapeInventoryBy999Method(driver, asin);
     }
 
     private ChromeOptions baseOptions() {
         ChromeOptions options = new ChromeOptions();
         options.addArguments("--headless=new", "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--window-size=1920,1080");
+        
+        // Anti-detection
+        options.addArguments("--disable-blink-features=AutomationControlled");
+        options.setExperimentalOption("excludeSwitches", java.util.Collections.singletonList("enable-automation"));
+        options.setExperimentalOption("useAutomationExtension", false);
+        options.addArguments("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+
         options.setPageLoadStrategy(PageLoadStrategy.NORMAL);
         return options;
     }
@@ -243,6 +204,7 @@ public class SeleniumScraper implements Scraper {
             driver.get(url);
             WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
             try { wait.until(d -> ((JavascriptExecutor)d).executeScript("return document.readyState").equals("complete")); } catch (Exception ignored) {}
+            waitForPromotionWidgets(driver);
             dto.setTitle(driver.getTitle());
 
             // 价格
@@ -403,11 +365,21 @@ public class SeleniumScraper implements Scraper {
             if (dto.getInventory() == null) {
                 try {
                     log.info("ASIN: {} - 尝试通过 [999加购法] 获取真实库存", url);
-                    Optional<Integer> realInventory = scrapeInventoryBy999Method(driver, url);
-                    realInventory.ifPresent(dto::setInventory);
+                    Optional<InventoryProbeResult> realInventory = scrapeInventoryBy999Method(driver, url);
+                    realInventory.ifPresent(res -> {
+                        dto.setInventory(res.getQuantity());
+                        dto.setInventoryLimited(res.isLimited());
+                    });
                 } catch (WebDriverException e) {
                     log.error("ASIN: {} - 通过 [999加购法] 获取库存时发生错误: {}", url, e.getMessage());
                 }
+            }
+
+            if (dto.getCouponValue() == null) {
+                extractCouponText(driver).ifPresent(dto::setCouponValue);
+            }
+            if (!dto.isLightningDeal()) {
+                dto.setLightningDeal(detectLightningDeal(driver));
             }
 
             success = true;
@@ -424,6 +396,93 @@ public class SeleniumScraper implements Scraper {
             }
             borrowed.close();
         }
+    }
+
+    private void waitForPromotionWidgets(WebDriver driver) {
+        int waitSeconds = Math.max(0, scraperProperties.getSeleniumPromoWaitSeconds());
+        if (waitSeconds == 0) {
+            return;
+        }
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(waitSeconds));
+        try {
+            wait.until(ExpectedConditions.or(
+                    ExpectedConditions.presenceOfElementLocated(By.cssSelector(".promoPriceBlockMessage")),
+                    ExpectedConditions.presenceOfElementLocated(By.cssSelector("#coupon-badge")),
+                    ExpectedConditions.presenceOfElementLocated(By.cssSelector("#dealBadge_feature_div"))
+            ));
+        } catch (TimeoutException ignored) {
+            log.debug("促销组件在 {} 秒内没有渲染，可能该 ASIN 没有优惠/秒杀", waitSeconds);
+        }
+    }
+
+    private Optional<String> extractCouponText(WebDriver driver) {
+        By[] selectors = new By[] {
+                By.cssSelector(".promoPriceBlockMessage"),
+                By.cssSelector("#coupon-badge"),
+                By.cssSelector("#couponBadge"),
+                By.cssSelector("label[for*='coupon']"),
+                By.cssSelector(".couponBadge"),
+                By.cssSelector("#promoPriceBlockMessage_feature_div"),
+                By.cssSelector(".a-color-success")
+        };
+        for (By selector : selectors) {
+            try {
+                List<WebElement> candidates = driver.findElements(selector);
+                for (WebElement el : candidates) {
+                    String normalized = normalizeCouponText(el.getText());
+                    if (normalized != null) {
+                        return Optional.of(normalized);
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return Optional.empty();
+    }
+
+    private boolean detectLightningDeal(WebDriver driver) {
+        By[] selectors = new By[] {
+                By.cssSelector("#dealBadge_feature_div"),
+                By.cssSelector("[id*='dealBadge']"),
+                By.cssSelector("[data-deal-id]"),
+                By.cssSelector(".dealBadge")
+        };
+        for (By selector : selectors) {
+            try {
+                List<WebElement> badges = driver.findElements(selector);
+                for (WebElement badge : badges) {
+                    String text = badge.getText();
+                    if (text == null) {
+                        continue;
+                    }
+                    String lower = text.toLowerCase(Locale.ROOT);
+                    if (lower.contains("deal") || lower.contains("limited time") || lower.contains("lightning")) {
+                        return true;
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return false;
+    }
+
+    private String normalizeCouponText(String raw) {
+        if (isBlank(raw)) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        Matcher matcher = COUPON_VALUE_PATTERN.matcher(trimmed);
+        if (matcher.find()) {
+            String value = matcher.group(1);
+            if (value.startsWith("$") || value.endsWith("%")) {
+                return value + " off";
+            }
+        }
+        String lower = trimmed.toLowerCase(Locale.ROOT);
+        if (lower.contains("coupon") || lower.contains("save")) {
+            return trimmed;
+        }
+        return null;
     }
 
     private WebElement firstPresent(WebDriver driver, By... selectors) {
@@ -482,6 +541,68 @@ public class SeleniumScraper implements Scraper {
         }
     }
 
+    private OptionalInt parseLimitQuantity(String alertText) {
+        if (alertText == null) {
+            return OptionalInt.empty();
+        }
+        String lower = alertText.toLowerCase(Locale.ROOT);
+        if (!lower.contains("limit") && !lower.contains("per customer")) {
+            return OptionalInt.empty();
+        }
+        Matcher matcher = LIMIT_NUMBER_PATTERN.matcher(alertText);
+        if (matcher.find()) {
+            try {
+                return OptionalInt.of(Integer.parseInt(matcher.group(1).replace(",", "")));
+            } catch (NumberFormatException ignored) {
+                log.debug("限购提示解析失败: {}", alertText);
+            }
+        }
+        return OptionalInt.empty();
+    }
+
+    private void injectZipCodeIfConfigured(WebDriver driver) {
+        if (!scraperProperties.isKeywordRankInjectZipEnabled()) {
+            return;
+        }
+        String zipCode = Optional.ofNullable(scraperProperties.getKeywordRankZipCode())
+                .map(String::trim)
+                .orElse("");
+        if (zipCode.isEmpty()) {
+            return;
+        }
+        try {
+            performZipCodeInjection(driver, zipCode);
+        } catch (Exception e) {
+            log.warn("注入邮编 {} 失败，继续使用默认地址。错误: {}", zipCode, e.getMessage());
+        }
+    }
+
+    private void performZipCodeInjection(WebDriver driver, String zipCode) {
+        driver.get(AMAZON_HOME);
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+
+        WebElement locationLink = wait.until(ExpectedConditions.elementToBeClickable(By.id("nav-global-location-popover-link")));
+        locationLink.click();
+
+        WebElement zipInput = wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("GLUXZipUpdateInput")));
+        zipInput.clear();
+        zipInput.sendKeys(zipCode);
+
+        WebElement applyButton = wait.until(ExpectedConditions.elementToBeClickable(By.id("GLUXZipUpdate")));
+        applyButton.click();
+
+        try {
+            WebElement doneButton = new WebDriverWait(driver, Duration.ofSeconds(5))
+                    .until(ExpectedConditions.elementToBeClickable(By.name("glowDoneButton")));
+            doneButton.click();
+        } catch (TimeoutException ignored) {
+            log.debug("邮编注入未出现 Done 按钮，可能页面自动刷新");
+        }
+
+        driver.navigate().refresh();
+        log.debug("已尝试注入邮编 {} 并刷新页面", zipCode);
+    }
+
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
     }
@@ -506,7 +627,7 @@ public class SeleniumScraper implements Scraper {
      * @param asin 当前 ASIN，用于日志记录
      * @return Optional<Integer> 包含真实库存数量，如果无法确定则为空
      */
-    private Optional<Integer> scrapeInventoryBy999Method(WebDriver driver, String asin) {
+    private Optional<InventoryProbeResult> scrapeInventoryBy999Method(WebDriver driver, String asin) {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
 
         try {
@@ -563,10 +684,29 @@ public class SeleniumScraper implements Scraper {
                 WebElement cartContainer = driver.findElement(By.id("sc-active-cart"));
                 alertText = cartContainer.getText();
             }
-            
+
             log.info("ASIN: {} - 捕获到潜在库存提示信息: '{}'", asin, alertText.replace('\n', ' '));
 
-            return scrapeParser.parseInventoryFromAlert(alertText);
+            OptionalInt limitQuantity = parseLimitQuantity(alertText);
+            if (limitQuantity.isPresent()) {
+                return Optional.of(new InventoryProbeResult(limitQuantity.getAsInt(), true));
+            }
+
+            Optional<Integer> parsedInventory = scrapeParser.parseInventoryFromAlert(alertText);
+            if (parsedInventory.isPresent()) {
+                return Optional.of(new InventoryProbeResult(parsedInventory.get(), false));
+            }
+
+            // 尝试回退到读取当前数量输入框的值
+            try {
+                WebElement quantitySnapshot = driver.findElement(By.cssSelector("input[name^='quantity']"));
+                Integer parsed = parseInteger(quantitySnapshot.getAttribute("value"));
+                if (parsed != null) {
+                    return Optional.of(new InventoryProbeResult(parsed, false));
+                }
+            } catch (NoSuchElementException ignored) {
+                log.debug("购物车未找到数量输入框，无法推断库存");
+            }
 
         } catch (TimeoutException e) {
             log.warn("ASIN: {} - 执行 [999加购法] 步骤超时，可能页面结构已改变或无加购按钮: {}", asin, e.getMessage());
@@ -576,6 +716,7 @@ public class SeleniumScraper implements Scraper {
             log.error("ASIN: {} - 执行 [999加购法] 时发生未预料的异常", asin, e);
             return Optional.empty();
         }
+        return Optional.empty();
     }
 
     private boolean checkForCaptcha(WebDriver driver) {
@@ -624,6 +765,7 @@ public class SeleniumScraper implements Scraper {
         boolean success = false;
         KeywordRankResult found = null;
         try {
+            injectZipCodeIfConfigured(driver);
             for (int page = 1; page <= maxPages; page++) {
                 String searchUrl = buildSearchUrl(keyword, page);
                 log.info("抓取关键词='{}' 第 {} 页，URL={}", keyword, page, searchUrl);
@@ -640,7 +782,13 @@ public class SeleniumScraper implements Scraper {
                     wait.until(ExpectedConditions.presenceOfElementLocated(
                             By.cssSelector("[data-component-type='s-search-result'], div.s-result-item[data-asin]")));
                 } catch (TimeoutException te) {
-                    log.warn("关键词='{}' 第 {} 页加载超时，终止后续翻页", keyword, page);
+                    log.warn("关键词='{}' 第 {} 页加载超时，终止后续翻页。当前标题: '{}', URL: '{}'", keyword, page, driver.getTitle(), driver.getCurrentUrl());
+                    try {
+                        String pageSource = driver.getPageSource();
+                        log.warn("页面源码片段 (前1000字符): {}", pageSource.length() > 1000 ? pageSource.substring(0, 1000) : pageSource);
+                    } catch (Exception e) {
+                        log.warn("无法获取页面源码: {}", e.getMessage());
+                    }
                     break;
                 }
 
@@ -700,40 +848,26 @@ public class SeleniumScraper implements Scraper {
 
     // 构建搜索 URL，区分站点域名；page=1 不加 &page 参数以模拟自然第一页
     private String buildSearchUrl(String keyword, int page) {
-        String base = "https://www.amazon.com"; // 简化为美国站
+        String base = AMAZON_HOME; // 简化为美国站
         String encoded = java.net.URLEncoder.encode(keyword, java.nio.charset.StandardCharsets.UTF_8);
         return base + "/s?k=" + encoded + (page > 1 ? "&page=" + page : "");
     }
 
-    public static class KeywordRankResult {
-        private final int naturalRank;
-        private final int sponsoredRank;
-        private final int page;
+    private static final class InventoryProbeResult {
+        private final int quantity;
+        private final boolean limited;
 
-        public KeywordRankResult(int naturalRank, int sponsoredRank, int page) {
-            this.naturalRank = naturalRank;
-            this.sponsoredRank = sponsoredRank;
-            this.page = page;
+        private InventoryProbeResult(int quantity, boolean limited) {
+            this.quantity = quantity;
+            this.limited = limited;
         }
 
-        public static KeywordRankResult notFound() {
-            return new KeywordRankResult(-1, -1, -1);
+        public int getQuantity() {
+            return quantity;
         }
 
-        public int getNaturalRank() {
-            return naturalRank;
-        }
-
-        public int getSponsoredRank() {
-            return sponsoredRank;
-        }
-
-        public int getPage() {
-            return page;
-        }
-
-        public boolean isFound() {
-            return naturalRank > 0;
+        public boolean isLimited() {
+            return limited;
         }
     }
 }

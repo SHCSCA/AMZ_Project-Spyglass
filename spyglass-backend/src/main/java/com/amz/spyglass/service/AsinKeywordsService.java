@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.amz.spyglass.config.ScraperProperties;
 import com.amz.spyglass.dto.AsinKeywordDto;
 import com.amz.spyglass.dto.KeywordRankHistoryDto;
 import com.amz.spyglass.dto.KeywordRankResponse;
@@ -18,6 +19,8 @@ import com.amz.spyglass.model.KeywordRankHistory;
 import com.amz.spyglass.repository.AsinKeywordsRepository;
 import com.amz.spyglass.repository.AsinRepository;
 import com.amz.spyglass.repository.KeywordRankHistoryRepository;
+import com.amz.spyglass.scraper.KeywordRankResult;
+import com.amz.spyglass.scraper.KeywordRankScraper;
 import com.amz.spyglass.scraper.SeleniumScraper;
 
 import jakarta.persistence.EntityNotFoundException;
@@ -39,17 +42,23 @@ public class AsinKeywordsService {
     private final AsinKeywordsRepository asinKeywordsRepository;
     private final AsinRepository asinRepository;
     private final KeywordRankHistoryRepository keywordRankHistoryRepository;
+    private final KeywordRankScraper keywordRankScraper;
     private final SeleniumScraper seleniumScraper;
+    private final ScraperProperties scraperProperties;
 
     @Autowired
     public AsinKeywordsService(AsinKeywordsRepository asinKeywordsRepository,
                                AsinRepository asinRepository,
                                KeywordRankHistoryRepository keywordRankHistoryRepository,
-                               SeleniumScraper seleniumScraper) {
+                               KeywordRankScraper keywordRankScraper,
+                               SeleniumScraper seleniumScraper,
+                               ScraperProperties scraperProperties) {
         this.asinKeywordsRepository = asinKeywordsRepository;
         this.asinRepository = asinRepository;
         this.keywordRankHistoryRepository = keywordRankHistoryRepository;
+        this.keywordRankScraper = keywordRankScraper;
         this.seleniumScraper = seleniumScraper;
+        this.scraperProperties = scraperProperties;
     }
 
     /**
@@ -198,7 +207,7 @@ public class AsinKeywordsService {
         LocalDate today = LocalDate.now();
 
         try {
-            SeleniumScraper.KeywordRankResult rankResult = seleniumScraper.fetchKeywordRank(asinCode, keyword.getKeyword());
+            KeywordRankResult rankResult = fetchRankWithFallback(keyword);
 
             KeywordRankHistory history = new KeywordRankHistory(
                     keyword,
@@ -216,6 +225,23 @@ public class AsinKeywordsService {
             keywordRankHistoryRepository.save(failedHistory);
             throw new IllegalStateException("关键词排名抓取失败: " + e.getMessage(), e);
         }
+    }
+
+    private KeywordRankResult fetchRankWithFallback(AsinKeywords keyword) {
+        String asinCode = keyword.getAsin().getAsin();
+        if (scraperProperties.isKeywordRankUseSelenium()) {
+            try {
+                KeywordRankResult seleniumResult = seleniumScraper.fetchKeywordRank(asinCode, keyword.getKeyword());
+                if (seleniumResult != null && seleniumResult.isFound()) {
+                    return seleniumResult;
+                }
+                log.debug("Selenium 未在前 {} 页找到 ASIN {} 的排名，回退 Jsoup.", scraperProperties.getKeywordRankMaxPages(), asinCode);
+            } catch (Exception e) {
+                log.warn("Selenium 关键词排名抓取失败 asin={} keyword='{}'，将回退 Jsoup。错误: {}",
+                        asinCode, keyword.getKeyword(), e.getMessage());
+            }
+        }
+        return keywordRankScraper.fetchKeywordRank(keyword.getKeyword(), asinCode, "US");
     }
 
     private AsinKeywordDto convertToDto(AsinKeywords keyword) {

@@ -1,5 +1,6 @@
 package com.amz.spyglass.scraper;
 
+import java.math.BigDecimal;
 import java.util.Optional;
 
 import org.jsoup.Jsoup;
@@ -107,5 +108,48 @@ class ScrapeParserTest {
         Optional<Integer> rank = parser.parseKeywordRank(filteredResults, "TARGET");
         assertTrue(rank.isPresent());
         assertEquals(2, rank.get()); // Should be 2nd in the filtered list
+    }
+
+    @Test
+    void testParsePriceFromStructuredJson() {
+        String html = """
+                <html>
+                <head>
+                    <title>Sample Offer</title>
+                    <script type="application/ld+json">
+                        {"offers":{"price":"19.99"}}
+                    </script>
+                </head>
+                <body></body>
+                </html>
+                """;
+        AsinSnapshotDTO dto = ScrapeParser.parse(html, "https://example.com");
+        assertEquals(new BigDecimal("19.99"), dto.getPrice());
+    }
+
+    @Test
+    void testParseCouponFlexibleSelectors() {
+        String html = """
+                <html>
+                <body>
+                    <label for='coupon'>Save 20% with coupon</label>
+                </body>
+                </html>
+                """;
+        AsinSnapshotDTO dto = ScrapeParser.parse(html, "https://example.com");
+        assertEquals("20% off", dto.getCouponValue());
+    }
+
+    @Test
+    void testParseLightningDealDetection() {
+        String html = """
+                <html>
+                <body>
+                    <div id='dealBadge_feature_div'>Lightning Deal</div>
+                </body>
+                </html>
+                """;
+        AsinSnapshotDTO dto = ScrapeParser.parse(html, "https://example.com");
+        assertTrue(dto.isLightningDeal(), "Lightning deal badge should be detected");
     }
 }

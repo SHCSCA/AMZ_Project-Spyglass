@@ -1,17 +1,13 @@
 package com.amz.spyglass.scheduler;
 
 import com.amz.spyglass.model.AsinKeywords;
-import com.amz.spyglass.model.KeywordRankHistory;
 import com.amz.spyglass.repository.AsinKeywordsRepository;
-import com.amz.spyglass.repository.KeywordRankHistoryRepository;
-import com.amz.spyglass.scraper.SeleniumScraper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -25,10 +21,7 @@ public class KeywordRankScheduler {
     private AsinKeywordsRepository asinKeywordsRepository;
 
     @Autowired
-    private KeywordRankHistoryRepository keywordRankHistoryRepository;
-
-    @Autowired
-    private SeleniumScraper seleniumScraper;
+    private com.amz.spyglass.service.AsinKeywordsService asinKeywordsService;
 
     /**
      * 每天凌晨2点执行关键词排名抓取。
@@ -46,31 +39,12 @@ public class KeywordRankScheduler {
         }
 
         log.info("Found {} keywords to track.", keywordsToTrack.size());
-        LocalDate today = LocalDate.now();
 
         for (AsinKeywords keyword : keywordsToTrack) {
-            String asinCode = keyword.getAsin().getAsin();
             try {
-                log.debug("Scraping rank for ASIN '{}' with keyword '{}'", asinCode, keyword.getKeyword());
-                SeleniumScraper.KeywordRankResult rankResult = seleniumScraper.fetchKeywordRank(asinCode, keyword.getKeyword());
-
-                KeywordRankHistory history = new KeywordRankHistory(
-                        keyword,
-                        today,
-                        rankResult.getNaturalRank(),
-                        rankResult.getSponsoredRank(),
-                        rankResult.getPage()
-                );
-
-                keywordRankHistoryRepository.save(history);
-                log.info("Successfully scraped and saved rank for ASIN '{}', keyword '{}'. Natural Rank: {}, Sponsored Rank: {}, Page: {}",
-                        asinCode, keyword.getKeyword(), rankResult.getNaturalRank(), rankResult.getSponsoredRank(), rankResult.getPage());
-
+                asinKeywordsService.checkKeywordRank(keyword.getId());
             } catch (Exception e) {
-                log.error("Failed to scrape keyword rank for ASIN '{}', keyword '{}'", asinCode, keyword.getKeyword(), e);
-                // 创建一个失败记录
-                KeywordRankHistory failedHistory = new KeywordRankHistory(keyword, today, -1, -1, -1);
-                keywordRankHistoryRepository.save(failedHistory);
+                log.error("Failed to scrape keyword rank for keywordId={} asin='{}'", keyword.getId(), keyword.getAsin().getAsin(), e);
             }
         }
         log.info("Finished scheduled keyword rank scraping task.");

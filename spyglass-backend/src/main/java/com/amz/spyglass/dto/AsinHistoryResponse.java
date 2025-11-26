@@ -72,6 +72,12 @@ public class AsinHistoryResponse {
     private Integer inventory;
 
     /**
+     * 是否命中限购（库存>限制值）
+     */
+    @Schema(description = "是否命中限购", nullable = true)
+    private Boolean inventoryLimited;
+
+    /**
      * 产品特点（bullet points）
      */
     @Schema(description = "要点（拼接文本）", nullable = true)

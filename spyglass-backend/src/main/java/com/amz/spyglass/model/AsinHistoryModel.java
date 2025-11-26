@@ -85,6 +85,12 @@ public class AsinHistoryModel extends BaseEntityModel {
     private Integer inventory;
 
     /**
+     * 是否命中限购（999 大法返回限购阈值时为 true）
+     */
+    @Column(name = "inventory_limited")
+    private Boolean inventoryLimited;
+
+    /**
      * 主图MD5哈希值
      */
     @Column(length = 64)
