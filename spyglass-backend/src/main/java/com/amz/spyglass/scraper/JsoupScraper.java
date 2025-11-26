@@ -4,7 +4,19 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
+import org.apache.hc.client5.http.auth.AuthScope;
+import org.apache.hc.client5.http.auth.UsernamePasswordCredentials;
+import org.apache.hc.client5.http.classic.methods.HttpGet;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.auth.BasicCredentialsProvider;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.client5.http.impl.routing.DefaultProxyRoutePlanner;
+import org.apache.hc.core5.http.HttpHost;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.apache.hc.core5.util.Timeout;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -60,22 +72,11 @@ public class JsoupScraper implements Scraper {
         AsinSnapshotDTO snapshot = null;
         Exception lastEx = null;
         for (int attempt = 1; attempt <= scraperProperties.getMaxRetry(); attempt++) {
-            ProxyInstance proxy = null;
             try {
-                Connection conn = Jsoup.connect(url)
-                        .userAgent(randomUserAgent())
-                        .timeout((int) Duration.ofSeconds(30).toMillis())
-                        .followRedirects(true)
-                        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
-                        .header("Accept-Language", "en-US,en;q=0.9")
-                        .header("Cache-Control", "no-cache")
-                        .header("Pragma", "no-cache")
-                        .header("Connection", "keep-alive")
-                        .header("Upgrade-Insecure-Requests", "1");
-
-                proxy = attachProxy(conn).orElse(null);
-                Document doc = conn.get();
-                proxyManager.recordSuccess(proxy);
+                // 使用 Apache HttpClient 替代 Jsoup.connect
+                String html = fetchHtmlWithHttpClient(url);
+                Document doc = Jsoup.parse(html, url);
+                
                 snapshot = ScrapeParser.parse(doc.html(), url);
                 snapshot.setSnapshotAt(java.time.Instant.now());
 
@@ -91,14 +92,12 @@ public class JsoupScraper implements Scraper {
 
                 long backoff = (long) Math.min(4000, 1000 * Math.pow(2, attempt - 1));
                 sleepQuietly(backoff);
-            } catch (IOException | RuntimeException ex) {
+            } catch (Exception ex) {
                 lastEx = ex;
                 logger.warn("[Jsoup] 抓取异常 attempt={} url={} msg={}", attempt, url, ex.getMessage());
-                proxyManager.recordFailure(proxy);
                 if (attempt == scraperProperties.getMaxRetry()) {
-                    throw ex;
+                    // throw ex; // Will be thrown after loop
                 }
-
                 long backoff = (long) Math.min(4000, 1000 * Math.pow(2, attempt - 1));
                 sleepQuietly(backoff);
             }
@@ -115,24 +114,58 @@ public class JsoupScraper implements Scraper {
 
     public Optional<Document> getDocument(String url) {
         try {
-            Connection conn = Jsoup.connect(url)
-                    .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                    .timeout((int) Duration.ofSeconds(30).toMillis())
-                    .followRedirects(true);
-
-            ProxyInstance proxy = attachProxy(conn).orElse(null);
-            try {
-                Document doc = conn.get();
-                proxyManager.recordSuccess(proxy);
-                return Optional.of(doc);
-            } catch (Exception e) {
-                proxyManager.recordFailure(proxy);
-                logger.error("Error fetching document from {}: {}", url, e.getMessage());
-                return Optional.empty();
-            }
+            // 使用 Apache HttpClient 替代 Jsoup.connect 以解决 407 代理认证问题
+            String html = fetchHtmlWithHttpClient(url);
+            return Optional.of(Jsoup.parse(html, url));
         } catch (Exception e) {
-            logger.error("Error initializing connection to {}: {}", url, e.getMessage());
+            logger.error("Error fetching document from {}: {}", url, e.getMessage());
             return Optional.empty();
+        }
+    }
+
+    private String fetchHtmlWithHttpClient(String url) throws Exception {
+        ProxyInstance proxyInstance = proxyManager.borrow()
+                .orElseThrow(() -> new IllegalStateException("未配置可用代理"));
+
+        String proxyHost = proxyInstance.getHost();
+        int proxyPort = proxyInstance.getPort();
+        
+        logger.info("[Jsoup-HttpClient] 使用代理: {}:{} 用户: {}", proxyHost, proxyPort, proxyInstance.getUsername().orElse("<none>"));
+
+        HttpHost proxy = new HttpHost(proxyHost, proxyPort);
+        BasicCredentialsProvider credsProvider = new BasicCredentialsProvider();
+        proxyInstance.getUsername().ifPresent(username -> {
+            char[] password = proxyInstance.getPassword().map(String::toCharArray).orElse(new char[0]);
+            credsProvider.setCredentials(new AuthScope(proxy), new UsernamePasswordCredentials(username, password));
+        });
+
+        RequestConfig requestConfig = RequestConfig.custom()
+                .setConnectTimeout(Timeout.of(30, TimeUnit.SECONDS))
+                .setResponseTimeout(Timeout.of(30, TimeUnit.SECONDS))
+                .build();
+
+        try (CloseableHttpClient httpClient = HttpClients.custom()
+                .setDefaultCredentialsProvider(credsProvider)
+                .setRoutePlanner(new DefaultProxyRoutePlanner(proxy))
+                .setDefaultRequestConfig(requestConfig)
+                .build()) {
+
+            HttpGet request = new HttpGet(url);
+            // 使用与 HttpClientScraper 完全一致的 Header
+            request.setHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+            request.setHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8");
+            request.setHeader("Accept-Language", "en-US,en;q=0.9");
+            request.setHeader("Accept-Encoding", "gzip, deflate, br");
+            request.setHeader("Connection", "keep-alive");
+            request.setHeader("Upgrade-Insecure-Requests", "1");
+            request.setHeader("Sec-Fetch-Dest", "document");
+            
+            return httpClient.execute(request, response -> {
+                return EntityUtils.toString(response.getEntity());
+            });
+        } finally {
+            // 简单记录代理使用情况（不区分成功失败，因为异常会抛出）
+            proxyManager.recordSuccess(proxyInstance);
         }
     }
 

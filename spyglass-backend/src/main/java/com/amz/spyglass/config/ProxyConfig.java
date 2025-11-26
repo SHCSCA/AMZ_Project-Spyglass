@@ -35,7 +35,15 @@ public class ProxyConfig {
      */
     private long cooldownSeconds = 600L;
 
-    private List<ProxyEntry> list = new ArrayList<>();
+    private List<ProxyEntry> providers = new ArrayList<>();
+
+    public List<ProxyEntry> getList() {
+        return providers;
+    }
+
+    public void setList(List<ProxyEntry> list) {
+        this.providers = list;
+    }
 
     /**
      * 内部静态类，用于映射 application.yml 中的每个代理条目

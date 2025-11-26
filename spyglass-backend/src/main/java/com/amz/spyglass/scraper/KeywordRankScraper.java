@@ -26,7 +26,7 @@ public class KeywordRankScraper {
 
     // “下一页”按钮的选择器
     private static final String NEXT_PAGE_SELECTOR = "a.s-pagination-item.s-pagination-next";
-    private static final int MAX_PAGES_TO_CHECK = 5; // 为避免性能问题和被封锁，最多检查前5页
+    private static final int MAX_PAGES_TO_CHECK = 3; // 为避免性能问题和被封锁，最多检查前3页
 
     /**
      * 抓取指定ASIN在特定关键词下的自然搜索排名。

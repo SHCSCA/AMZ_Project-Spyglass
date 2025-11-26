@@ -93,4 +93,13 @@ public class ProxyManager {
     public List<ProxyInstance> getProxies() {
         return proxies;
     }
+
+    public Optional<ProxyInstance> findByHostAndPort(String host, int port) {
+        if (!enabled || proxies.isEmpty()) {
+            return Optional.empty();
+        }
+        return proxies.stream()
+                .filter(p -> p.getHost().equals(host) && p.getPort() == port)
+                .findFirst();
+    }
 }
