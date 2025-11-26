@@ -12,6 +12,17 @@ spring:
     username: ${DB_USER:amzspaglass}
     password: ${DB_PASSWORD:RYna5tjK7nKwZd7J}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    # 新增 HikariCP 连接池配置，增强稳定性
+    hikari:
+      # 连接最大存活时间（30分钟），避免持有太久的连接
+      max-lifetime: 1800000
+      # 连接超时时间（30秒）
+      connection-timeout: 30000
+      # 心跳检测间隔（30秒），防止防火墙切断空闲连接
+      keepalive-time: 30000
+      # 借用连接时进行检测，确保不拿到坏连接
+      test-on-borrow: true
+      validation-query: SELECT 1
   jpa:
     hibernate:
       ddl-auto: none
@@ -68,12 +79,16 @@ scraper:
   keywordRankInjectZipEnabled: ${SCRAPER_KEYWORD_ZIP_ENABLED:true}
   keywordRankZipCode: ${SCRAPER_KEYWORD_ZIP:10001}
   seleniumPromoWaitSeconds: ${SCRAPER_PROMO_WAIT_SECONDS:5}
+  # 默认指向 localhost 以支持本地开发直连 Docker 暴露的端口
+  # Docker 部署时需通过环境变量覆盖为 http://selenium:4444/wd/hub
+  seleniumRemoteUrl: ${SELENIUM_REMOTE_URL:http://localhost:4444/wd/hub}
   proxy:
     enabled: true
     providers:
       - name: novproxy
         type: RESIDENTIAL
-        url: us.novproxy.io:1000
+        host: us.novproxy.io
+        port: 1000
         username: sehx5222-region-US
         password: ygazcakb
   htmlDumpEnabled: true

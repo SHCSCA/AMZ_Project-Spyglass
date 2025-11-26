@@ -1,16 +1,22 @@
 package com.amz.spyglass.scraper;
 
+import java.io.File;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.MalformedURLException; // 添加日志注解导入
 import java.net.URI;
 import java.net.URL;
+import java.nio.file.Files;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -76,6 +82,111 @@ public class SeleniumScraper implements Scraper {
     }
 
     /**
+     * [修复] 关键词排名抓取 - 增加调试日志与邮编注入，支持翻页（前3页）
+     */
+    public KeywordRankResult fetchKeywordRank(String keyword, String targetAsin, String market, String zipCode) {
+        BorrowedDriver borrowed = createDriver();
+        WebDriver driver = borrowed.driver();
+        ProxyInstance proxy = borrowed.proxy();
+        boolean success = false;
+        int maxPages = 3; // 限制只抓前3页
+
+        try {
+            // 1. 注入邮编 (如果配置了)
+            if (scraperProperties.isKeywordRankInjectZipEnabled()) {
+                injectZipCodeIfConfigured(driver);
+            }
+
+            // 2. 访问搜索页
+            String searchUrl = "https://www.amazon.com/s?k=" + keyword.replace(" ", "+");
+            log.info("[KeywordRank] Searching: {}", searchUrl);
+            driver.get(searchUrl);
+
+            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+
+            // 循环翻页
+            for (int page = 1; page <= maxPages; page++) {
+                log.info("[KeywordRank] Scanning page {}", page);
+
+                // 3. 等待结果加载
+                try {
+                    wait.until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("div[data-component-type='s-search-result']")));
+                } catch (Exception e) {
+                    log.warn("[KeywordRank] Page {} results not found or timeout", page);
+                    break;
+                }
+
+                // 4. 遍历结果
+                List<WebElement> items = driver.findElements(By.cssSelector("div[data-component-type='s-search-result']"));
+                
+                // [调试日志]：打印前5个结果，验证搜索是否正常
+                if (page == 1) {
+                    List<String> topAsins = new ArrayList<>();
+                    for (int i = 0; i < Math.min(items.size(), 5); i++) {
+                        topAsins.add(items.get(i).getAttribute("data-asin"));
+                    }
+                    log.info("[KeywordRank] Search loaded. Top 5 results: {}", topAsins);
+                }
+
+                // 5. 查找目标 ASIN
+                for (int i = 0; i < items.size(); i++) {
+                    String asin = items.get(i).getAttribute("data-asin");
+                    if (targetAsin.equals(asin)) {
+                        // 计算绝对排名：(页码-1) * 每页数量(通常48) + 当前页位置
+                        // 注意：每页数量可能变化，这里简化计算，或者你可以累加之前的 items.size()
+                        // 简单起见，我们返回当前页的相对位置，或者你可以维护一个全局 counter
+                        int rankOnPage = i + 1;
+                        int absoluteRank = (page - 1) * 48 + rankOnPage; // 估算值
+                        
+                        log.info("[KeywordRank] Found target {} at Page {} Rank {} (Abs: {})", targetAsin, page, rankOnPage, absoluteRank);
+                        success = true;
+                        return new KeywordRankResult(absoluteRank, -1, page); 
+                    }
+                }
+
+                // 如果当前页没找到，且还没到最大页数，尝试点击“下一页”
+                if (page < maxPages) {
+                    try {
+                        // 尝试多种选择器定位下一页
+                        List<WebElement> nextBtns = driver.findElements(By.cssSelector("a.s-pagination-next:not(.s-pagination-disabled)"));
+                        if (nextBtns.isEmpty()) {
+                            log.info("[KeywordRank] No next page button found at page {}", page);
+                            break;
+                        }
+                        WebElement nextBtn = nextBtns.get(0);
+                        
+                        // 滚动到按钮位置以确保可点击
+                        ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", nextBtn);
+                        Thread.sleep(1000); // 稍微停顿模拟人类
+                        nextBtn.click();
+                        Thread.sleep(2000); // 等待页面刷新
+                    } catch (Exception e) {
+                        log.info("[KeywordRank] Failed to click next page at page {}: {}", page, e.getMessage());
+                        break; // 无法翻页，退出循环
+                    }
+                }
+            }
+
+            log.info("[KeywordRank] Target {} not found in top {} pages", targetAsin, maxPages);
+            success = true;
+            return new KeywordRankResult(-1, -1, -1);
+
+        } catch (Exception e) {
+            log.error("[KeywordRank] Failed: {}", e.getMessage());
+            return new KeywordRankResult(-1, -1, -1);
+        } finally {
+            if (proxy != null) {
+                if (success) {
+                    proxyManager.recordSuccess(proxy);
+                } else {
+                    proxyManager.recordFailure(proxy);
+                }
+            }
+            borrowed.close();
+        }
+    }
+
+    /**
      * 使用Selenium执行“999加购法”获取精准库存。
      *
      * @param driver WebDriver实例
@@ -89,6 +200,7 @@ public class SeleniumScraper implements Scraper {
     private ChromeOptions baseOptions() {
         ChromeOptions options = new ChromeOptions();
         options.addArguments("--headless=new", "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--window-size=1920,1080");
+        options.setAcceptInsecureCerts(true); // 允许不安全的证书，防止代理拦截导致的 SSL 错误
         
         // Anti-detection
         options.addArguments("--disable-blink-features=AutomationControlled");
@@ -103,13 +215,79 @@ public class SeleniumScraper implements Scraper {
     private ProxyInstance attachProxy(ChromeOptions options) {
         Optional<ProxyInstance> borrowed = proxyManager.borrow();
         borrowed.ifPresent(proxy -> {
-            options.addArguments("--proxy-server=" + proxy.getHost() + ':' + proxy.getPort());
+            configureProxy(options, proxy.getHost(), proxy.getPort(), proxy.getUsername().orElse(null), proxy.getPassword().orElse(null));
             log.debug("[Selenium] 使用代理 {}", proxy);
         });
         if (borrowed.isEmpty()) {
             log.debug("[Selenium] 未配置可用代理，回退直连模式");
         }
         return borrowed.orElse(null);
+    }
+
+    private void configureProxy(ChromeOptions options, String host, int port, String username, String password) {
+        if (host == null || host.isEmpty()) return;
+
+        options.addArguments("--proxy-server=" + host + ":" + port);
+
+        if (username != null && !username.isEmpty() && password != null) {
+            try {
+                File extension = createProxyAuthExtension(host, port, username, password);
+                options.addExtensions(extension);
+            } catch (IOException e) {
+                log.error("Failed to create proxy extension", e);
+            }
+        }
+    }
+
+    private File createProxyAuthExtension(String host, int port, String user, String pass) throws IOException {
+        String manifestJson = "{"
+                + "\"version\": \"1.0.0\","
+                + "\"manifest_version\": 2,"
+                + "\"name\": \"Chrome Proxy\","
+                + "\"permissions\": [\"proxy\", \"tabs\", \"unlimitedStorage\", \"storage\", \"<all_urls>\", \"webRequest\", \"webRequestBlocking\"],"
+                + "\"background\": {\"scripts\": [\"background.js\"]},"
+                + "\"minimum_chrome_version\":\"22.0.0\""
+                + "}";
+
+        String backgroundJs = "var config = {"
+                + "mode: 'fixed_servers',"
+                + "rules: {"
+                + "singleProxy: {"
+                + "scheme: 'http',"
+                + "host: '" + host + "',"
+                + "port: parseInt(" + port + ")"
+                + "},"
+                + "bypassList: ['localhost']"
+                + "}"
+                + "};"
+                + "chrome.proxy.settings.set({value: config, scope: 'regular'}, function() {});"
+                + "function callbackFn(details) {"
+                + "    return {"
+                + "        authCredentials: {"
+                + "            username: '" + user + "',"
+                + "            password: '" + pass + "'"
+                + "        }"
+                + "    };"
+                + "}"
+                + "chrome.webRequest.onAuthRequired.addListener("
+                + "            callbackFn,"
+                + "            {urls: ['<all_urls>']},"
+                + "            ['blocking']"
+                + ");";
+
+        File zipFile = File.createTempFile("proxy-auth", ".zip");
+        zipFile.deleteOnExit();
+
+        try (ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(zipFile.toPath()))) {
+            zos.putNextEntry(new ZipEntry("manifest.json"));
+            zos.write(manifestJson.getBytes());
+            zos.closeEntry();
+
+            zos.putNextEntry(new ZipEntry("background.js"));
+            zos.write(backgroundJs.getBytes());
+            zos.closeEntry();
+        }
+        return zipFile;
     }
 
     private BorrowedDriver createDriver() {
@@ -385,6 +563,18 @@ public class SeleniumScraper implements Scraper {
             success = true;
             return dto;
         } catch (RuntimeException ex) {
+            log.error("Selenium 抓取异常: URL={} Error={}", url, ex.getMessage());
+            try {
+                String title = driver.getTitle();
+                String currentUrl = driver.getCurrentUrl();
+                log.error("Selenium 失败现场: Title='{}', CurrentURL='{}'", title, currentUrl);
+                String pageSource = driver.getPageSource();
+                if (pageSource != null) {
+                    log.error("Selenium 页面源码前1000字符: \n{}", pageSource.substring(0, Math.min(pageSource.length(), 1000)));
+                }
+            } catch (Exception inner) {
+                log.error("无法获取 Selenium 失败现场信息: {}", inner.getMessage());
+            }
             throw ex;
         } finally {
             if (proxy != null) {
@@ -638,11 +828,47 @@ public class SeleniumScraper implements Scraper {
             }
 
             // 1. 定位并点击 "Add to Cart" 按钮
-            WebElement addToCartButton = wait.until(ExpectedConditions.elementToBeClickable(By.id("add-to-cart-button")));
+            // [修复] 尝试多种“加入购物车”按钮选择器
+            WebElement addToCartButton = null;
+            List<By> selectors = List.of(
+                By.id("add-to-cart-button"),
+                By.id("add-to-cart-button-ubb"),
+                By.name("submit.add-to-cart"),
+                By.cssSelector("#exports_desktop_qualifiedBuybox_atc_feature_div input"),
+                By.cssSelector("input[name='submit.add-to-cart']")
+            );
+
+            for (By selector : selectors) {
+                try {
+                    addToCartButton = wait.until(ExpectedConditions.elementToBeClickable(selector));
+                    if (addToCartButton != null) break;
+                } catch (Exception ignored) {}
+            }
+
+            if (addToCartButton == null) {
+                log.warn("[Inventory] No 'Add to Cart' button found for {}. Might be OOS or 'See All Buying Options'.", asin);
+                // 检查是否无货
+                try {
+                    String pageSource = driver.getPageSource();
+                    if (pageSource.contains("Currently unavailable") || pageSource.contains("Temporarily out of stock")) {
+                        return Optional.of(new InventoryProbeResult(0, false));
+                    }
+                } catch (Exception ignored) {}
+                return Optional.empty();
+            }
+
             addToCartButton.click();
             log.debug("ASIN: {} - 已点击 'Add to Cart'", asin);
 
-            // 2. 跳转到购物车页面
+            // 2. 处理可能出现的侧边栏/弹窗，进入购物车页面
+            try {
+                // 有时会弹出 "No thanks" (拒绝保修)
+                WebElement noCoverage = new WebDriverWait(driver, Duration.ofSeconds(3))
+                    .until(ExpectedConditions.elementToBeClickable(By.cssSelector("#attachSiNoCoverage input, button#attach-no-coverage-announce")));
+                noCoverage.click();
+            } catch (Exception ignored) {}
+
+            // 跳转到购物车页面
             // 点击加购后，有时会弹出一个侧边栏，有时会直接跳转。我们需要一个统一的入口进入购物车。
             // 最稳妥的方式是直接访问购物车URL。
             String cartUrl = "https://www.amazon.com/gp/cart/view.html";
@@ -707,6 +933,8 @@ public class SeleniumScraper implements Scraper {
             } catch (NoSuchElementException ignored) {
                 log.debug("购物车未找到数量输入框，无法推断库存");
             }
+            
+            return Optional.empty();
 
         } catch (TimeoutException e) {
             log.warn("ASIN: {} - 执行 [999加购法] 步骤超时，可能页面结构已改变或无加购按钮: {}", asin, e.getMessage());
@@ -714,9 +942,14 @@ public class SeleniumScraper implements Scraper {
             return Optional.empty();
         } catch (Exception e) {
             log.error("ASIN: {} - 执行 [999加购法] 时发生未预料的异常", asin, e);
+            try {
+                String pageSource = driver.getPageSource();
+                if (pageSource != null) {
+                    log.error("999加购法失败现场源码前1000字符: \n{}", pageSource.substring(0, Math.min(pageSource.length(), 1000)));
+                }
+            } catch (Exception inner) {}
             return Optional.empty();
         }
-        return Optional.empty();
     }
 
     private boolean checkForCaptcha(WebDriver driver) {

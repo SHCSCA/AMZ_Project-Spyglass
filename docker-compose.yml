@@ -11,6 +11,7 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       SCRAPER_FIXED_DELAY_MS: ${SCRAPER_FIXED_DELAY_MS:-14400000}
+      SELENIUM_REMOTE_URL: http://selenium:4444/wd/hub
       TZ: Asia/Shanghai
       JAVA_TOOL_OPTIONS: "-XX:+UseG1GC -XX:MaxRAMPercentage=75 -Duser.timezone=Asia/Shanghai"
     ports:

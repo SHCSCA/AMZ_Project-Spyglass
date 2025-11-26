@@ -1,11 +1,16 @@
 package com.amz.spyglass.service;
 
-import com.amz.spyglass.scraper.SeleniumScraper;
-import com.amz.spyglass.scraper.JsoupScraper;
 import com.amz.spyglass.scraper.HttpClientScraper;
+import com.amz.spyglass.scraper.JsoupScraper;
+import com.amz.spyglass.scraper.ProxyManager;
+import com.amz.spyglass.scraper.SeleniumScraper;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+
+import java.net.Authenticator;
+import java.net.PasswordAuthentication;
 
 /**
  * 亚马逊商品抓取服务
@@ -30,13 +35,41 @@ public class ScraperService {
     private final JsoupScraper jsoupScraper;
     private final SeleniumScraper seleniumScraper;
     private final HttpClientScraper httpClientScraper;
+    private final ProxyManager proxyManager;
 
     public ScraperService(JsoupScraper jsoupScraper, SeleniumScraper seleniumScraper, 
-                         HttpClientScraper httpClientScraper) {
+                         HttpClientScraper httpClientScraper, ProxyManager proxyManager) {
         this.jsoupScraper = jsoupScraper;
         this.seleniumScraper = seleniumScraper;
         this.httpClientScraper = httpClientScraper;
+        this.proxyManager = proxyManager;
         log.info("🚀 爬虫服务初始化完成 - 已加载HttpClient、Jsoup、Selenium三种抓取策略");
+    }
+
+    @PostConstruct
+    public void initAuthenticator() {
+        // 允许 Basic Auth 进行隧道传输 (关键修复: 解决 407 错误)
+        System.setProperty("jdk.http.auth.tunneling.disabledSchemes", "");
+        System.setProperty("jdk.http.auth.proxying.disabledSchemes", "");
+
+        // 设置全局代理认证 (修复 Jsoup 407 错误)
+        Authenticator.setDefault(new Authenticator() {
+            @Override
+            protected PasswordAuthentication getPasswordAuthentication() {
+                if (getRequestorType() == RequestorType.PROXY) {
+                    // 强制返回第一个可用代理的凭证 (简单粗暴策略，确保认证通过)
+                    return proxyManager.getProxies().stream()
+                            .findFirst()
+                            .map(p -> {
+                                log.debug("Authenticator providing creds for proxy: {}", p.getHost());
+                                return new PasswordAuthentication(p.getUsername().orElse(""), p.getPassword().orElse("").toCharArray());
+                            })
+                            .orElse(null);
+                }
+                return null;
+            }
+        });
+        log.info("✅ 全局代理认证器已配置 (Jsoup支持, Tunneling enabled)");
     }
 
     /**
