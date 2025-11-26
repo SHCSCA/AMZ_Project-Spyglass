@@ -34,7 +34,7 @@
 | ✅ **(V2.0) 差评内容** 抓取与存储 (`review_alert`) | ❌ **后端负责HTML Diff高亮** (移至前端实现) |
 | ✅ 历史数据存储和图表化展示 (MySQL) | ❌ 抓取亚马逊以外的平台（如eBay, Walmart） |
 | ✅ **数据库驱动的警报日志** (写入 `alert_log`) | ❌ **图片二进制MD5下载** |
-| ✅ **(可选) 钉钉**主动警报 | ❌ 抓取关键词搜索排名 (V3.0 考虑) |
+| ✅ **(可选) 钉钉**主动警报 | ✅ **抓取关键词搜索排名** (V2.1 实现，支持前3页) |
 | ✅ API First 架构（Spring Boot RESTful API） | |
 | ✅ AI辅助生成的Web前端（React/Vue） | |
 
@@ -135,6 +135,34 @@ mvn -DskipTests spring-boot:run
 4. 持久化到 `asin_history`。
 5. `AlertService` 对比上一次快照 -> 触发并写入 `alert_log` / 可选钉钉推送。
 6. 新的差评写入 `review_alert`（并对 1-3 星差评触发告警）。
+
+### 核心抓取策略说明
+
+#### 1. 真实库存侦察 ("999加购法")
+系统使用 Selenium 模拟真实用户行为来突破亚马逊页面显示的 "In Stock" 模糊限制：
+1. **加购**：自动定位并点击 "Add to Cart" 按钮。
+2. **进入购物车**：直接导航至购物车页面，避开侧边栏干扰。
+3. **修改数量**：将购买数量修改为 **999** 并点击更新。
+4. **解析提示**：捕获亚马逊返回的 "This seller has only X of these available" 提示文本。
+5. **提取数据**：正则解析出精确库存数；若无提示且允许购买999个，则标记为充足 (999+)。
+
+> **⚠️ 无法获取库存的常见场景**：
+> * **验证码拦截**：若代理 IP 被识别，页面弹出验证码，流程将终止。
+> * **无购物车按钮**：商品缺货 (Currently unavailable)、预售或仅有 "See All Buying Options" 时无法执行加购。
+> * **强限购**：若卖家设置了严格的“每单限购 N 件”，系统只能探测到该上限（如 "Limit 5 per customer"），无法获知背后真实库存。
+> * **页面结构变更**：亚马逊购物车流程频繁改版，若选择器失效可能导致解析失败。
+
+#### 2. 关键词排名抓取
+系统支持对配置的关键词进行自然排名抓取：
+1. **范围限制**：仅扫描搜索结果的前 **3页**。
+2. **排名计算**：若在前3页找到目标ASIN，记录其绝对排名（如第2页第5位 = 48+5 = 53）；若未找到，记录为 -1。
+3. **执行方式**：通过 Selenium 模拟真实浏览器行为（支持翻页点击）。
+
+> **⚠️ 无法获取排名的常见场景**：
+> * **排名靠后**：目标 ASIN 位于第 3 页之后（系统记录为 -1）。
+> * **变体显示**：搜索结果展示父 ASIN 或其他变体，导致与目标子 ASIN 不匹配。
+> * **地理位置差异**：尽管注入了邮编，不同区域 IP 看到的排名仍可能存在波动。
+> * **反爬虫**：连续翻页易触发验证码，导致后续页面无法加载。
 
 ### 示例：添加与查询 ASIN（分页）
 ```
@@ -541,6 +569,23 @@ curl 'http://localhost:8081/api/asin?page=0&size=50&groupId=1'
     * `GET /api/asin/{id}/alerts` (获取特定ASIN的所有警报)
 * **F-API-006 (V2.0 Review Query):** (V2.0 开放)
     * `GET /api/asin/{id}/reviews?rating=negative` (获取特定ASIN的已存储差评列表)
+* **F-API-007 (V2.1 Costs & Keywords):** (V2.1 开放)
+    * `POST /api/v1/asins/{asin}/costs` (配置成本)
+    * `GET /api/v1/asins/{asin}/costs/calculate-profit` (计算利润)
+    * `POST /api/v1/asins/{asin}/keywords` (添加关键词)
+    * `GET /api/v1/asins/{asin}/keywords/{keywordId}/history` (关键词排名历史)
+
+### 数据库 Schema (参考)
+> 完整 Schema 请参考项目根目录 `schema.sql`。
+
+#### 核心表结构摘要
+* **asin**: 存储监控目标的基础信息 (asin, site, nickname, inventory_threshold, brand, group_id)。
+* **asin_history**: 存储每次抓取的快照 (price, bsr, inventory, image_md5, etc.)。
+* **alert_log**: 存储所有触发的告警 (alert_type, old_value, new_value, message)。
+* **review_alert**: 存储抓取到的评论 (review_id, rating, review_text)。
+* **asin_costs** (V2.1): 存储成本配置 (purchase_cost, shipping_cost, fba_fee)。
+* **asin_keywords** (V2.1): 存储监控关键词 (keyword, is_tracked)。
+* **keyword_rank_history** (V2.1): 存储关键词排名历史 (natural_rank, sponsored_rank, page)。
 
 ---
 
