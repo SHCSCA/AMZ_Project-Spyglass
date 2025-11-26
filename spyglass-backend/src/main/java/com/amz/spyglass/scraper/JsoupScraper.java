@@ -32,7 +32,7 @@ public class JsoupScraper implements Scraper {
     @Override
     public String fetchTitle(String url) throws Exception {
         Connection conn = Jsoup.connect(url)
-                .userAgent("Mozilla/5.0 (compatible; SpyglassBot/1.0)")
+                .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                 .timeout((int) Duration.ofSeconds(20).toMillis())
                 .followRedirects(true);
 

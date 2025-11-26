@@ -112,6 +112,9 @@ public class ScraperService {
                 if (snap.getBulletPoints() == null && seleniumSnap.getBulletPoints() != null) snap.setBulletPoints(seleniumSnap.getBulletPoints());
                 if (snap.getImageMd5() == null && seleniumSnap.getImageMd5() != null) snap.setImageMd5(seleniumSnap.getImageMd5());
                 if (snap.getAplusMd5() == null && seleniumSnap.getAplusMd5() != null) snap.setAplusMd5(seleniumSnap.getAplusMd5());
+                if (snap.getCouponValue() == null && seleniumSnap.getCouponValue() != null) snap.setCouponValue(seleniumSnap.getCouponValue());
+                if (!snap.isLightningDeal() && seleniumSnap.isLightningDeal()) snap.setLightningDeal(true);
+                if (snap.getInventoryLimited() == null && seleniumSnap.getInventoryLimited() != null) snap.setInventoryLimited(seleniumSnap.getInventoryLimited());
                 log.info("✅ Selenium 补全完成 -> price={} bsr={} bsr_cat={} inv={} reviews={} rating={} bullets={} imgMd5={} aplusMd5={}",
                         snap.getPrice(), snap.getBsr(), snap.getBsrCategory(), snap.getInventory(), snap.getTotalReviews(),
                         snap.getAvgRating(), snap.getBulletPoints() != null ? "Y" : "N",

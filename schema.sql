@@ -145,6 +145,7 @@ CREATE TABLE `asin_history`  (
   `bsr_subcategory` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT 'BSR 小类',
   `bsr_subcategory_rank` int NULL DEFAULT NULL COMMENT 'BSR 小类排名',
   `inventory` int NULL DEFAULT NULL COMMENT '库存快照',
+  `inventory_limited` tinyint(1) NULL DEFAULT NULL COMMENT '库存是否受限购',
   `bullet_points` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT '五点要点 (换行分隔)',
   `image_md5` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '主图 MD5',
   `aplus_md5` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT 'A+ 内容 MD5',

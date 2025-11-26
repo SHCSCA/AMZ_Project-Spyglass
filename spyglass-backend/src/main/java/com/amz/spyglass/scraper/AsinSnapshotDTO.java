@@ -64,4 +64,7 @@ public class AsinSnapshotDTO {
     // V2.1 F-DATA-002: 新增促销信息字段
     private String couponValue;
     private boolean isLightningDeal;
+
+    // 库存受限标记（999 大法遇到限购时为 true）
+    private Boolean inventoryLimited;
 }

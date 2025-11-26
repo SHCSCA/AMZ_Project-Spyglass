@@ -15,6 +15,9 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.stereotype.Component;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -32,6 +35,8 @@ public class ScrapeParser {
     private static final Pattern INVENTORY_ALERT_PATTERN = Pattern.compile("(\\d{1,3}(,\\d{3})*|\\d+)(?!\\d*%)");
     private static final Pattern PRICE_PATTERN = Pattern.compile("(\\d{1,3}(?:,\\d{3})*(?:\\.\\d{2})|\\d+\\.\\d{2}|\\d+)");
     private static final Pattern AVAILABLE_QTY_PATTERN = Pattern.compile("\\\"(?:availableQuantity|maxOrderQuantity|availableQty|remainingQty)\\\"\\s*:?\\s*(\\d+)");
+    private static final Pattern COUPON_VALUE_PATTERN = Pattern.compile("(\\$\\d+(?:\\.\\d+)?|\\d+%)");
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
 
     /**
@@ -76,7 +81,14 @@ public class ScrapeParser {
             priceText = firstAttributeValue(doc, "span[data-a-size=xl][data-a-color=price]", "data-a-value");
         }
 
-        s.setPrice(parsePriceToBigDecimal(priceText));
+        BigDecimal parsedPrice = parsePriceToBigDecimal(priceText);
+        if (parsedPrice == null) {
+            parsedPrice = parsePriceFromDataMetrics(doc).orElse(null);
+        }
+        if (parsedPrice == null) {
+            parsedPrice = parsePriceFromStructuredJson(doc).orElse(null);
+        }
+        s.setPrice(parsedPrice);
 
         // BSR: 查找 "Best Sellers Rank" 信息，支持多种格式
         Integer bsr = null;
@@ -392,6 +404,70 @@ public class ScrapeParser {
         return null;
     }
 
+    private static Optional<BigDecimal> parsePriceFromDataMetrics(Document doc) {
+        Element metrics = doc.selectFirst("#cerberus-data-metrics");
+        if (metrics != null) {
+            BigDecimal price = parsePriceToBigDecimal(metrics.attr("data-asin-price"));
+            if (price != null) {
+                return Optional.of(price);
+            }
+        }
+        Element priceAttr = doc.selectFirst("[data-asin-price]");
+        if (priceAttr != null) {
+            BigDecimal price = parsePriceToBigDecimal(priceAttr.attr("data-asin-price"));
+            if (price != null) {
+                return Optional.of(price);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static Optional<BigDecimal> parsePriceFromStructuredJson(Document doc) {
+        Elements ldScripts = doc.select("script[type=application/ld+json]");
+        for (Element script : ldScripts) {
+            String data = script.data();
+            if (isBlank(data)) {
+                continue;
+            }
+            try {
+                JsonNode root = OBJECT_MAPPER.readTree(data);
+                BigDecimal price = extractPriceFromOffersNode(root.path("offers"));
+                if (price != null) {
+                    return Optional.of(price);
+                }
+            } catch (Exception e) {
+                log.debug("解析 ld+json 价格失败: {}", e.getMessage());
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static BigDecimal extractPriceFromOffersNode(JsonNode offersNode) {
+        if (offersNode == null || offersNode.isMissingNode()) {
+            return null;
+        }
+        if (offersNode.isArray()) {
+            for (JsonNode node : offersNode) {
+                BigDecimal price = extractPriceFromOffersNode(node);
+                if (price != null) {
+                    return price;
+                }
+            }
+            return null;
+        }
+        if (offersNode.has("price")) {
+            return parsePriceToBigDecimal(offersNode.get("price").asText());
+        }
+        if (offersNode.has("lowPrice")) {
+            return parsePriceToBigDecimal(offersNode.get("lowPrice").asText());
+        }
+        JsonNode priceSpec = offersNode.path("priceSpecification");
+        if (!priceSpec.isMissingNode() && priceSpec.has("price")) {
+            return parsePriceToBigDecimal(priceSpec.get("price").asText());
+        }
+        return null;
+    }
+
     private static Integer extractInventoryFromQuantityInputs(Document doc) {
         Element quantityInput = doc.selectFirst("input#quantity, input[name=quantity], input#mobileQuantityStepper-input, input[data-max]");
         if (quantityInput != null) {
@@ -525,20 +601,23 @@ public class ScrapeParser {
      * @return Optional<String> 包含优惠券面额文本, 如 "$10.00 off" 或 "5% off"
      */
     private static Optional<String> parseCoupon(Document doc) {
-        // 策略1: 查找常见的优惠券标签和文本
-        // CSS选择器可能需要根据实际页面结构进行调整
-        Element couponElement = doc.selectFirst("label[for*=coupon] span.a-size-large, span.promoPriceBlockMessage");
-        if (couponElement != null) {
-            String couponText = couponElement.text().trim();
-            log.debug("通过选择器找到 Coupon 元素，文本: '{}'", couponText);
-            if (!couponText.isEmpty()) {
-                // 清理文本，例如 "Save an extra $10.00 with this coupon" -> "$10.00"
-                Pattern pattern = Pattern.compile("(\\$\\d+\\.\\d+|\\d+\\%|\\d+元)");
-                Matcher matcher = pattern.matcher(couponText);
-                if (matcher.find()) {
-                    return Optional.of(matcher.group(1) + " off");
+        String[] selectors = new String[] {
+                "label[for*=coupon]",
+                "span.promoPriceBlockMessage",
+                "#coupon-badge",
+                "#couponBadge",
+                ".couponBadge",
+                "#promoPriceBlockMessage_feature_div",
+                ".a-color-success"
+        };
+        for (String selector : selectors) {
+            Elements candidates = doc.select(selector);
+            for (Element candidate : candidates) {
+                Optional<String> normalized = normalizeCouponText(candidate.text());
+                if (normalized.isPresent()) {
+                    log.debug("通过选择器 {} 捕获优惠券文本: {}", selector, normalized.get());
+                    return normalized;
                 }
-                return Optional.of(couponText);
             }
         }
         return Optional.empty();
@@ -554,14 +633,40 @@ public class ScrapeParser {
     private static boolean parseLightningDeal(Document doc) {
         // 策略: 查找包含 "deal" 或 "limited time" 等关键词的元素
         // 这也是一个需要根据实际页面结构灵活调整的选择器
-        Element dealElement = doc.selectFirst("[id*=deal], [class*=deal], [data-deal-id]");
-        if (dealElement != null) {
-            String elementText = dealElement.text().toLowerCase();
-            log.debug("找到疑似 Deal 元素: {}", elementText);
-            // 进一步确认文本内容是否包含秒杀关键词
-            return elementText.contains("deal") || elementText.contains("limited time");
+        String[] selectors = new String[] {
+                "#dealBadge_feature_div",
+                "[id*=dealBadge]",
+                "[data-deal-id]",
+                ".dealBadge",
+                ".savingsBadge"
+        };
+        for (String selector : selectors) {
+            Elements elements = doc.select(selector);
+            for (Element el : elements) {
+                String elementText = el.text().toLowerCase(Locale.ROOT);
+                if (elementText.contains("deal") || elementText.contains("limited time") || elementText.contains("lightning")) {
+                    log.debug("找到疑似 Deal 元素: {}", elementText);
+                    return true;
+                }
+            }
         }
-        return false;
+        return !doc.select("span:matchesOwn((?i)lightning deal)").isEmpty();
+    }
+
+    private static Optional<String> normalizeCouponText(String rawText) {
+        if (isBlank(rawText)) {
+            return Optional.empty();
+        }
+        Matcher matcher = COUPON_VALUE_PATTERN.matcher(rawText);
+        if (matcher.find()) {
+            String value = matcher.group(1);
+            return Optional.of(value + " off");
+        }
+        String lower = rawText.toLowerCase(Locale.ROOT);
+        if (lower.contains("coupon") || lower.contains("save")) {
+            return Optional.of(rawText.trim());
+        }
+        return Optional.empty();
     }
 
     /**

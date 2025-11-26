@@ -37,6 +37,12 @@ public class ScraperProperties {
     private int keywordRankMaxPages = 5;
     /** 是否在解析搜索结果时过滤 Sponsored 广告（默认 true） */
     private boolean filterSponsored = true;
+    /** 是否优先使用 Selenium 进行关键词排名抓取（默认 true，可在本地禁用以绕过 Selenium 依赖） */
+    private boolean keywordRankUseSelenium = true;
+    /** 是否在关键词排名抓取前强制注入邮编 */
+    private boolean keywordRankInjectZipEnabled = true;
+    /** 默认注入的邮政编码（美区默认 10001） */
+    private String keywordRankZipCode = "10001";
 
     /** Selenium 远程 WebDriver 服务地址 */
     private String seleniumRemoteUrl = "http://selenium:4444/wd/hub";
@@ -44,4 +50,6 @@ public class ScraperProperties {
     private int seleniumMaxSessions = 2;
     /** 等待获取 Selenium 实例的超时时间（秒） */
     private long seleniumAcquireTimeoutSeconds = 60;
+    /** Selenium 在等待异步优惠券/秒杀组件渲染时的最大等待秒数 */
+    private int seleniumPromoWaitSeconds = 5;
 }

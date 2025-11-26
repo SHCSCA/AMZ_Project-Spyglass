@@ -113,6 +113,7 @@ public class ScraperTaskExecutor {
             h.setBsrSubcategory(snap.getBsrSubcategory());
             h.setBsrSubcategoryRank(snap.getBsrSubcategoryRank());
             h.setInventory(snap.getInventory());
+            h.setInventoryLimited(snap.getInventoryLimited());
             h.setImageMd5(snap.getImageMd5());
             h.setTotalReviews(snap.getTotalReviews());
             h.setAvgRating(snap.getAvgRating());
@@ -120,6 +121,8 @@ public class ScraperTaskExecutor {
             h.setLatestNegativeReviewMd5(snap.getLatestNegativeReviewMd5());
             h.setSnapshotAt(snap.getSnapshotAt() == null ? Instant.now() : snap.getSnapshotAt());
             h.setAplusMd5(snap.getAplusMd5());
+            h.setCouponValue(snap.getCouponValue());
+            h.setIsLightningDeal(snap.isLightningDeal());
 
             asinHistoryRepository.save(h);
             log.info("[History] 保存快照成功 ASIN={} 字段: price={}, bsr=#{}, reviews={}, rating={}, inventory={}",

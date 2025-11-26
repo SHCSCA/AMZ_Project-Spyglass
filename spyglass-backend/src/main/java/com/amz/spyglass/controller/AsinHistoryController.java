@@ -124,6 +124,7 @@ public class AsinHistoryController {
         r.setBsrSubcategory(h.getBsrSubcategory());
         r.setBsrSubcategoryRank(h.getBsrSubcategoryRank());
         r.setInventory(h.getInventory());
+        r.setInventoryLimited(h.getInventoryLimited());
         r.setBulletPoints(h.getBulletPoints());
         r.setImageMd5(h.getImageMd5());
         r.setAplusMd5(h.getAplusMd5());
