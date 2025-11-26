@@ -50,6 +50,13 @@ public class SeleniumScraper implements Scraper {
     private final long acquireTimeoutSeconds;
 
     private static final Pattern PRICE_PATTERN = Pattern.compile("(\\d{1,3}(?:,\\d{3})*(?:\\.\\d{2})|\\d+\\.\\d{2}|\\d+)");
+    // 购物车页面中数量输入框的选择器
+    private static final By CART_QUANTITY_INPUT_SELECTOR = By.cssSelector("input[name='quantity']");
+    // 购物车中商品行的选择器，用于定位特定ASIN
+    private static final By CART_ITEM_SELECTOR = By.cssSelector("div[data-asin]");
+    // 商家限购提示的选择器
+    private static final By PURCHASE_LIMIT_ERROR_SELECTOR = By.cssSelector(".sc-quantity-update-message .a-alert-content");
+
 
     public SeleniumScraper(ProxyManager proxyManager, ScrapeParser scrapeParser, ScraperProperties scraperProperties) {
         this.proxyManager = proxyManager;
@@ -62,6 +69,67 @@ public class SeleniumScraper implements Scraper {
             throw new IllegalArgumentException("无效的 Selenium 远程地址: " + scraperProperties.getSeleniumRemoteUrl(), e);
         }
         this.acquireTimeoutSeconds = Math.max(1L, scraperProperties.getSeleniumAcquireTimeoutSeconds());
+    }
+
+    /**
+     * 使用Selenium执行“999加购法”获取精准库存。
+     *
+     * @param driver WebDriver实例
+     * @param asin   目标ASIN
+     * @return Optional<Integer> 库存数量。如果遇到商家限购，则返回-1。如果操作失败或未找到元素，则返回empty。
+     */
+    public Optional<Integer> fetchInventoryBy999Method(WebDriver driver, String asin) {
+        try {
+            // 1. 导航至购物车页面
+            driver.get("https://www.amazon.com/gp/cart/view.html");
+            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+
+            // 2. 定位到目标ASIN所在的购物车条目
+            WebElement cartItem = wait.until(ExpectedConditions.visibilityOfElementLocated(
+                By.cssSelector(String.format("div[data-asin='%s']", asin))
+            ));
+            if (cartItem == null) {
+                log.warn("ASIN {} not found in cart.", asin);
+                return Optional.empty();
+            }
+
+            // 3. 找到数量输入框并尝试修改为999
+            WebElement quantityInput = cartItem.findElement(CART_QUANTITY_INPUT_SELECTOR);
+            quantityInput.clear();
+            quantityInput.sendKeys("999");
+            // 模拟回车或点击更新按钮来提交变更
+            quantityInput.submit();
+
+            // 4. 等待页面响应（关键步骤）
+            // 等待一个明确的信号，比如一个加载动画消失，或者简单等待几秒
+            try {
+                Thread.sleep(3000); // 简单等待，生产环境建议换成更可靠的显式等待
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("Inventory fetch sleep interrupted", e);
+            }
+
+            // 5. 检查是否存在“商家限购”的错误提示
+            List<WebElement> limitErrors = cartItem.findElements(PURCHASE_LIMIT_ERROR_SELECTOR);
+            if (!limitErrors.isEmpty() && limitErrors.get(0).isDisplayed()) {
+                String errorMessage = limitErrors.get(0).getText();
+                log.warn("Seller purchase limit detected for ASIN {}. Message: '{}'. Returning -1.", asin, errorMessage);
+                // 返回-1作为特殊标记，表示遇到限购
+                return Optional.of(-1);
+            }
+
+            // 6. 如果没有限购，读取最终的数量值
+            String finalQuantity = cartItem.findElement(CART_QUANTITY_INPUT_SELECTOR).getAttribute("value");
+            log.info("Successfully fetched inventory for ASIN {}: {}", asin, finalQuantity);
+            return Optional.of(Integer.parseInt(finalQuantity));
+
+        } catch (TimeoutException e) {
+            log.error("Timeout waiting for cart item for ASIN {}. It might not be in the cart.", asin, e);
+            return Optional.empty();
+        } catch (Exception e) {
+            log.error("Failed to fetch inventory for ASIN {} using Selenium. Error: {}", asin, e.getMessage(), e);
+            return Optional.empty();
+        }
     }
 
     private ChromeOptions baseOptions() {
@@ -579,7 +647,7 @@ public class SeleniumScraper implements Scraper {
                 String pageSource = driver.getPageSource();
                 org.jsoup.nodes.Document doc = org.jsoup.Jsoup.parse(pageSource, driver.getCurrentUrl());
 
-                java.util.List<org.jsoup.nodes.Element> allResults = doc.select("[data-component-type='s-search-result'][data-asin]");
+                java.util.List<org.jsoup.nodes.Element> allResults = scrapeParser.selectSearchResults(doc);
                 int pageCountBeforeFilter = allResults.size();
                 if (scraperProperties.isFilterSponsored()) {
                     allResults = allResults.stream()
@@ -594,7 +662,7 @@ public class SeleniumScraper implements Scraper {
                     // 可能是页面结构完全改变，或者被识别为机器人但没有显示标准验证码
                 }
 
-                Optional<Integer> rankOnPageOpt = scrapeParser.parseKeywordRank(doc, targetAsin);
+                Optional<Integer> rankOnPageOpt = scrapeParser.parseKeywordRank(allResults, targetAsin);
                 if (rankOnPageOpt.isPresent()) {
                     int rankOnPage = rankOnPageOpt.get();
                     int globalRank = cumulativeOffset + rankOnPage;
