@@ -601,7 +601,11 @@ public class ScrapeParser {
      * @return Optional<String> 包含优惠券面额文本, 如 "$10.00 off" 或 "5% off"
      */
     private static Optional<String> parseCoupon(Document doc) {
+        // [修复] 优先查找精确的折扣百分比元素，避免抓取到 "Up to 30% off" 等模糊信息
         String[] selectors = new String[] {
+                ".savingsPercentage", // 精确的节省比例，如 "-29%"
+                "span[class*='savingsPercentage']",
+                "#regularprice_savings .a-color-price", // "You Save: $10.00 (10%)"
                 "label[for*=coupon]",
                 "span.promoPriceBlockMessage",
                 "#coupon-badge",

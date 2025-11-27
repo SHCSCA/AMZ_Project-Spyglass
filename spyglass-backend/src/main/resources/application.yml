@@ -87,10 +87,10 @@ scraper:
     providers:
       - name: novproxy
         type: RESIDENTIAL
-        host: us.novproxy.io
-        port: 1000
-        username: sehx5222-region-US
-        password: ygazcakb
+        host: ${PROXY_HOST:us.novproxy.io}
+        port: ${PROXY_PORT:1000}
+        username: ${PROXY_USER:sehx5222-region-US}
+        password: ${PROXY_PASS:ygazcakb}
   htmlDumpEnabled: true
   htmlDumpDir: logs/html-dump
   randomDelayMinMs: 150

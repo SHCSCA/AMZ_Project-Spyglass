@@ -902,13 +902,15 @@ public class SeleniumScraper implements Scraper {
                 log.warn("ASIN: {} - 未找到标准的库存提示元素，尝试查找页面上的所有警告文本", asin);
             }
 
-            String alertText;
+            String alertText = "";
             if (alertElement != null) {
                 alertText = alertElement.getText();
             } else {
                 // Fallback: 获取整个购物车容器的文本，看是否包含相关信息
-                WebElement cartContainer = driver.findElement(By.id("sc-active-cart"));
-                alertText = cartContainer.getText();
+                try {
+                    WebElement cartContainer = driver.findElement(By.id("sc-active-cart"));
+                    alertText = cartContainer.getText();
+                } catch (Exception ignored) {}
             }
 
             log.info("ASIN: {} - 捕获到潜在库存提示信息: '{}'", asin, alertText.replace('\n', ' '));
@@ -923,18 +925,12 @@ public class SeleniumScraper implements Scraper {
                 return Optional.of(new InventoryProbeResult(parsedInventory.get(), false));
             }
 
-            // 尝试回退到读取当前数量输入框的值
-            try {
-                WebElement quantitySnapshot = driver.findElement(By.cssSelector("input[name^='quantity']"));
-                Integer parsed = parseInteger(quantitySnapshot.getAttribute("value"));
-                if (parsed != null) {
-                    return Optional.of(new InventoryProbeResult(parsed, false));
-                }
-            } catch (NoSuchElementException ignored) {
-                log.debug("购物车未找到数量输入框，无法推断库存");
-            }
-            
-            return Optional.empty();
+            // [修改] 策略变更：如果能成功加购并尝试修改为999，但没有出现“仅剩X件”的提示，
+            // 且也没有出现限购提示，则认为库存充足，直接返回 999。
+            // 之前的逻辑是尝试读取输入框的值，但这可能因为页面刷新或DOM变化而失败。
+            // 只要流程走到这里没有报错，且没有被上面的逻辑捕获（即没有明确的库存不足提示），就默认 999。
+            log.info("ASIN: {} - 未发现明确的库存不足提示，默认库存充足 (999)", asin);
+            return Optional.of(new InventoryProbeResult(999, false));
 
         } catch (TimeoutException e) {
             log.warn("ASIN: {} - 执行 [999加购法] 步骤超时，可能页面结构已改变或无加购按钮: {}", asin, e.getMessage());
