@@ -46,6 +46,12 @@ public class AsinResponse {
     @Schema(description = "库存预警阈值", nullable = true)
     private Integer inventoryThreshold;
 
+    /**
+     * 价格变动阈值（百分比）
+     */
+    @Schema(description = "价格变动阈值（百分比）", nullable = true)
+    private Double priceChangeThreshold;
+
     /** 品牌 */
     @Schema(description = "品牌", nullable = true)
     private String brand;

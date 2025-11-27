@@ -121,6 +121,7 @@ public class AsinController {
         a.setSite(req.getSite());
         a.setNickname(req.getNickname());
         a.setInventoryThreshold(req.getInventoryThreshold());
+        a.setPriceChangeThreshold(req.getPriceChangeThreshold());
         a.setBrand(req.getBrand());
         if (req.getGroupId() != null) {
             AsinGroupModel group = groupRepository.findById(req.getGroupId()).orElse(null);
@@ -235,6 +236,7 @@ public class AsinController {
         log.info("Request to update config for ASIN ID: {}, with data: {}", id, req);
         return asinRepository.findById(id).map(a -> {
             a.setInventoryThreshold(req.getInventoryThreshold());
+            a.setPriceChangeThreshold(req.getPriceChangeThreshold());
             a.setNickname(req.getNickname());
             a.setBrand(req.getBrand());
             if (req.getGroupId() != null) {
@@ -261,6 +263,7 @@ public class AsinController {
         r.setSite(a.getSite());
         r.setNickname(a.getNickname());
         r.setInventoryThreshold(a.getInventoryThreshold());
+        r.setPriceChangeThreshold(a.getPriceChangeThreshold());
         r.setBrand(a.getBrand());
         if (a.getGroup() != null) {
             r.setGroupId(a.getGroup().getId());

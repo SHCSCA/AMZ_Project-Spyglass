@@ -45,6 +45,13 @@ public class AsinRequest {
     private Integer inventoryThreshold;
 
     /**
+     * 价格变动监控阈值（百分比），可选。
+     * 例如 5.0 表示价格变化超过 5% 时触发告警。
+     */
+    @Schema(description = "价格变动监控阈值(%)", example = "5.0", nullable = true)
+    private Double priceChangeThreshold;
+
+    /**
      * 品牌（可选）
      */
     @Schema(description = "品牌", nullable = true)

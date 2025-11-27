@@ -49,6 +49,13 @@ public class AsinModel extends BaseEntityModel {
     private Integer inventoryThreshold;
 
     /**
+     * 价格变动监控阈值（百分比），例如 5.0 表示 5%。
+     * 若为 null 则使用系统默认值。
+     */
+    @Column(name = "price_change_threshold")
+    private Double priceChangeThreshold;
+
+    /**
      * 品牌（例如："Sagenest"、"IKEA"），用于区分同一分组内不同品牌的竞品。
      */
     @Column(length = 128)
