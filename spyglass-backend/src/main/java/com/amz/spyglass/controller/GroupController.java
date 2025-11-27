@@ -68,6 +68,30 @@ public class GroupController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    @PutMapping("/{id}")
+    @Operation(summary = "更新分组", description = "更新指定 ID 的分组名称或描述")
+    public ResponseEntity<AsinGroupModel> update(@PathVariable Long id, @RequestBody AsinGroupModel req) {
+        return groupRepository.findById(id).map(g -> {
+            g.setName(req.getName());
+            g.setDescription(req.getDescription());
+            g.setUpdatedAt(Instant.now());
+            AsinGroupModel saved = groupRepository.save(g);
+            return ResponseEntity.ok(saved);
+        }).orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "删除分组", description = "删除指定 ID 的分组。注意：组内的 ASIN 不会被删除，只会解除关联。")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        if (!groupRepository.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        // 可以在这里处理关联 ASIN 的逻辑，例如将它们的 groupId 置空
+        // 由于数据库设置了 ON DELETE SET NULL，这里直接删除即可
+        groupRepository.deleteById(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/{id}/asins")
     @Operation(summary = "查看分组下 ASIN 列表", description = "按分组分页列出 ASIN")
     public PageResponse<AsinResponse> listAsins(@PathVariable Long id,
